@@ -42,12 +42,28 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
 
         buf.resize(nRead);
 
-        bighexdump(dwOffset, buf, flags);
+        bighexdump(dwOffset, buf, flags | (nLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
 
         nLength -= nRead;
         dwOffset += nRead;
     }
     fclose(f);
+}
+DWORD GetFileSize(const std::string& filename)
+{
+    HANDLE hSrc = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ,
+                NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
+    if (INVALID_HANDLE_VALUE == hSrc)
+    {
+        error("Unable to open file %hs", filename.c_str());
+        return 0;
+    }
+
+    DWORD dwSize= GetFileSize(hSrc, NULL);
+
+    CloseHandle(hSrc);
+
+    return dwSize;
 }
 
 void usage()
@@ -68,7 +84,7 @@ void usage()
 int main(int argc, char **argv)
 {
     DWORD dwOffset=0;
-    int nLength=0x1000;
+    DWORD dwLength=0;
     DWORD dwBaseOffset=0;
     char *szFilename=NULL;
     int nDumpUnitSize=1;
@@ -82,7 +98,7 @@ int main(int argc, char **argv)
         {
             case 'b': HANDLEULOPTION(dwBaseOffset, DWORD); break;
             case 'o': HANDLEULOPTION(dwOffset, DWORD); break;
-            case 'l': HANDLEULOPTION(nLength, DWORD); break;
+            case 'l': HANDLEULOPTION(dwLength, DWORD); break;
 
             case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, DWORD); break;
             case 'a': g_dumpformat= DUMP_STRINGS; break;
@@ -123,10 +139,13 @@ int main(int argc, char **argv)
         nDumpUnitSize==2?DUMPUNIT_WORD:
         nDumpUnitSize==4?DUMPUNIT_DWORD:DUMPUNIT_BYTE;
 
-    if (dwOffset < dwBaseOffset)
+    if (dwLength==0)
+        dwLength= GetFileSize(szFilename);
+
+    if (dwOffset < dwBaseOffset && dwOffset+0x80000000 > dwBaseOffset)
         dwOffset= dwBaseOffset;
 
-    Dumpfile(szFilename, dwBaseOffset, dwOffset, nLength);
+    Dumpfile(szFilename, dwBaseOffset, dwOffset, dwLength);
 
     return 0;
 }
