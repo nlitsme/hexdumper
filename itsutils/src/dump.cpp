@@ -4,6 +4,7 @@
  */
 #include <windows.h>
 #include <stdio.h>
+#include "md5.h"
 #include "debug.h"
 #include "stringutils.h"
 #include "args.h"
@@ -90,6 +91,14 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         fclose(f);
     }
 
+    MD5 md5;
+    if (g_dumpformat==DUMP_MD5) {
+        if (!md5.InitHash()) {
+            error("MD5.init");
+            return;
+        }
+    }
+
     ByteVector buf;
     while (dwLength>0)
     {
@@ -102,12 +111,27 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
 
         buf.resize(nRead);
 
-        bighexdump(dwOffset, buf, flags | (dwLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
+        if (g_dumpformat==DUMP_MD5) {
+            if (!md5.AddData(buf)) {
+                error("MD5.add");
+                break;
+            }
+        }
+        else
+            bighexdump(dwOffset, buf, flags | (dwLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
 
         dwLength -= nRead;
         dwOffset += nRead;
     }
     fclose(f);
+    if (g_dumpformat==DUMP_MD5) {
+        ByteVector hash;
+        if (!md5.GetHash(hash)) {
+            error("MD5.final");
+            return;
+        }
+        debug("%hs\n", hash_as_string(hash).c_str());
+    }
 }
 
 void CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
@@ -249,6 +273,7 @@ int main(int argc, char **argv)
 
             case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, DWORD); break;
             case 's': HANDLEULOPTION(g_nStepSize, DWORD); break;
+            case 'm': g_dumpformat= DUMP_MD5; break;
             case 'a': g_dumpformat= DUMP_STRINGS; break;
             case 'c': g_dumpformat= DUMP_RAW; break;
             case 'f': g_fulldump= true; break;
