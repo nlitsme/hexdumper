@@ -14,7 +14,7 @@ DumpFormat g_dumpformat= DUMP_HEX_ASCII;
 int g_nMaxUnitsPerLine=-1;
 DWORD g_nStepSize= 0;
 bool g_fulldump= false;
-
+DWORD g_chunksize= 1024*1024;
 
 void StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
 {
@@ -102,7 +102,7 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
     ByteVector buf;
     while (dwLength>0)
     {
-        buf.resize(65536);
+        buf.resize(g_chunksize);
         DWORD dwBytesWanted= min(buf.size(), dwLength);
         DWORD nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
 
@@ -196,7 +196,7 @@ void Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
     ByteVector buf;
     while (dwLength>0)
     {
-        buf.resize(65536);
+        buf.resize(g_chunksize);
         DWORD dwBytesWanted= min(buf.size(), dwLength);
         DWORD nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
 
@@ -241,6 +241,7 @@ void usage()
     printf("    -e OFS    : end offset ( alternative for -l )\n");
     printf("    -w N      : how many words to print on each line\n");
     printf("    -s SIZE   : step with SIZE through memory\n");
+    printf("    -r SIZE   : read chunk size, default 1M\n");
     printf("    -1,2,4    : what to print: byte, word, dword\n");
     printf("    -a     : ascdump iso hexdump\n");
     printf("    -f     : full - do not summarize identical lines\n");
@@ -270,6 +271,8 @@ int main(int argc, char **argv)
             case 'o': HANDLEULOPTION(dwOffset, DWORD); break;
             case 'e': HANDLEULOPTION(dwEndOffset, DWORD); break;
             case 'l': HANDLEULOPTION(dwLength, DWORD); break;
+
+            case 'r': HANDLEULOPTION(g_chunksize, DWORD); break;
 
             case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, DWORD); break;
             case 's': HANDLEULOPTION(g_nStepSize, DWORD); break;
