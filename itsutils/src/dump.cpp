@@ -4,6 +4,9 @@
 #include "debug.h"
 #include "args.h"
 
+int g_nDumpUnitSize=1;
+int g_nMaxWordsPerLine=-1;
+
 void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
 {
     FILE *f= fopen(szFilename, "rb");
