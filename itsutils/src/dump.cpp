@@ -27,7 +27,7 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
         if (nRead==0)
             break;
 
-        hexdump(dwOffset, buf, nRead, g_nDumpUnitSize, g_nMaxWordsPerLine);
+        debug("%hs\n", hexdump(dwOffset, buf, nRead, g_nDumpUnitSize, g_nMaxWordsPerLine).c_str());
 
         nLength -= nRead;
         dwOffset += nRead;
