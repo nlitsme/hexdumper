@@ -4,6 +4,8 @@
  */
 #include <windows.h>
 #include <stdio.h>
+#include <io.h>
+#include <fcntl.h>
 #include "md5.h"
 #include "debug.h"
 #include "stringutils.h"
@@ -16,16 +18,27 @@ DWORD g_nStepSize= 0;
 bool g_fulldump= false;
 DWORD g_chunksize= 1024*1024;
 
-void StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
 {
     ByteVector buffer;
     std::string prevline;
     bool bSamePrinted= false;
 
-    FILE *f= fopen(szFilename, "rb");
+    FILE *f= NULL;
+    if (strcmp(szFilename, "-")==0) {
+        f= stdin;
+        if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
+            error("_setmode(stdin, rb)");
+            return false;
+        }
+    }
+    else {
+        f= fopen(szFilename, "rb");
+    }
+
     if (f==NULL) {
         perror(szFilename);
-        return;
+        return false;
     }
 
     if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
@@ -71,18 +84,29 @@ void StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         dwOffset += dwStep;
     }
     fclose(f);
+    return true;
 }
 
-void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
 {
     DWORD flags= hexdumpflags(g_dumpunit, g_nMaxUnitsPerLine, g_dumpformat)
         | (g_fulldump?0:HEXDUMP_SUMMARIZE) | (g_dumpformat==DUMP_RAW?0:HEXDUMP_WITH_OFFSET);
 
 
-    FILE *f= fopen(szFilename, "rb");
+    FILE *f= NULL;
+    if (strcmp(szFilename, "-")==0) {
+        f= stdin;
+        if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
+            error("_setmode(stdin, rb)");
+            return false;
+        }
+    }
+    else {
+        f= fopen(szFilename, "rb");
+    }
     if (f==NULL) {
         perror(szFilename);
-        return;
+        return false;
     }
 
     if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
@@ -95,7 +119,7 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
     if (g_dumpformat==DUMP_MD5) {
         if (!md5.InitHash()) {
             error("MD5.init");
-            return;
+            return false;
         }
     }
 
@@ -128,20 +152,31 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         ByteVector hash;
         if (!md5.GetHash(hash)) {
             error("MD5.final");
-            return;
+            return false;
         }
         debug("%hs\n", hash_as_string(hash).c_str());
     }
+    return true;
 }
 
-void CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+bool CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
 {
     ByteVector buffer;
 
-    FILE *f= fopen(szFilename, "rb");
+    FILE *f= NULL;
+    if (strcmp(szFilename, "-")==0) {
+        f= stdin;
+        if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
+            error("_setmode(stdin, rb)");
+            return false;
+        }
+    }
+    else {
+        f= fopen(szFilename, "rb");
+    }
     if (f==NULL) {
         perror(szFilename);
-        return;
+        return false;
     }
 
     if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
@@ -152,7 +187,7 @@ void CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DW
     FILE *g= fopen(szDstFilename, "w+b");
     if (g==NULL) {
         perror(szDstFilename);
-        return;
+        return false;
     }
 
 
@@ -173,13 +208,24 @@ void CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DW
     }
     fclose(g);
     fclose(f);
+    return true;
 }
-void Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+bool Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
 {
-    FILE *f= fopen(szFilename, "rb");
+    FILE *f= NULL;
+    if (strcmp(szFilename, "-")==0) {
+        f= stdin;
+        if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
+            error("_setmode(stdin, rb)");
+            return false;
+        }
+    }
+    else {
+        f= fopen(szFilename, "rb");
+    }
     if (f==NULL) {
         perror(szFilename);
-        return;
+        return false;
     }
 
     if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
@@ -190,7 +236,7 @@ void Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
     FILE *g= fopen(szDstFilename, "w+b");
     if (g==NULL) {
         perror(szDstFilename);
-        return;
+        return false;
     }
 
     ByteVector buf;
@@ -213,6 +259,7 @@ void Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
 
     fclose(g);
     fclose(f);
+    return true;
 }
 DWORD GetFileSize(const std::string& filename)
 {
@@ -265,7 +312,7 @@ int main(int argc, char **argv)
     int argsfound=0; 
     for (int i=1 ; i<argc ; i++)
     {
-        if (argv[i][0]=='-') switch (argv[i][1])
+        if (argv[i][0]=='-' && argv[i][1]) switch (argv[i][1])
         {
             case 'b': HANDLEULOPTION(dwBaseOffset, DWORD); break;
             case 'o': HANDLEULOPTION(dwOffset, DWORD); break;
@@ -317,6 +364,8 @@ int main(int argc, char **argv)
         nDumpUnitSize==2?DUMPUNIT_WORD:
         nDumpUnitSize==4?DUMPUNIT_DWORD:DUMPUNIT_BYTE;
 
+    if (dwLength==0 && strcmp(szFilename, "-")==0)
+        dwLength= -1;   // indicate to read until eof.
     if (dwLength==0 && dwEndOffset)
         dwLength= dwEndOffset-dwOffset;
 
