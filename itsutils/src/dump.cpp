@@ -52,6 +52,8 @@ int main(int argc, char **argv)
     DWORD dwBaseOffset=0;
     char *szFilename=NULL;
 
+    DebugStdOut();
+
     int argsfound=0; 
     for (int i=1 ; i<argc ; i++)
     {
