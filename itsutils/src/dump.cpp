@@ -2,6 +2,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include "debug.h"
+#include "stringutils.h"
 #include "args.h"
 
 int g_nDumpUnitSize=1;
