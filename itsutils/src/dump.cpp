@@ -11,9 +11,67 @@
 DumpUnitType g_dumpunit=DUMPUNIT_BYTE;
 DumpFormat g_dumpformat= DUMP_HEX_ASCII;
 int g_nMaxUnitsPerLine=-1;
+DWORD g_nStepSize= 0;
 bool g_fulldump= false;
 
-void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
+
+void StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+{
+    ByteVector buffer;
+    std::string prevline;
+    bool bSamePrinted= false;
+
+    FILE *f= fopen(szFilename, "rb");
+    if (f==NULL) {
+        perror(szFilename);
+        return;
+    }
+
+    if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    {
+        error("fseek");
+        fclose(f);
+    }
+
+    while (dwLength>0)
+    {
+        buffer.resize(DumpUnitSize(g_dumpunit)*g_nMaxUnitsPerLine);
+
+        DWORD dwBytesWanted= min(dwLength, buffer.size());
+        std::string line;
+        DWORD dwNumberOfBytesRead= fread(vectorptr(buffer), 1, dwBytesWanted, f);
+        if (dwNumberOfBytesRead==0)
+            break;
+        if (g_dumpformat==DUMP_RAW) {
+            line.clear();
+        }
+        else if (g_dumpformat==DUMP_STRINGS)
+            line= ascdump(buffer);
+        else if (g_dumpformat==DUMP_ASCII)
+            line= asciidump(vectorptr(buffer), dwNumberOfBytesRead)+"\n";
+        else
+            line= hexdump(dwOffset, vectorptr(buffer), dwNumberOfBytesRead, DumpUnitSize(g_dumpunit), g_nMaxUnitsPerLine).substr(9);
+
+        if (g_dumpformat==DUMP_RAW)
+            fwrite(vectorptr(buffer), 1, buffer.size(), stdout);
+        else if (!g_fulldump && line == prevline) {
+            if (!bSamePrinted && line != " * * * * * *\n")
+                printf("*\n", dwOffset);
+            bSamePrinted= true;
+        }
+        else {
+            bSamePrinted= false;
+
+            printf("%08lx: %hs", dwOffset, line.c_str());
+        }
+        prevline= line;
+        DWORD dwStep= min(dwLength, g_nStepSize);
+        dwLength -= dwStep;
+        dwOffset += dwStep;
+    }
+}
+
+void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
 {
     DWORD flags= hexdumpflags(g_dumpunit, g_nMaxUnitsPerLine, g_dumpformat)
         | (g_fulldump?0:HEXDUMP_SUMMARIZE) | (g_dumpformat==DUMP_RAW?0:HEXDUMP_WITH_OFFSET);
@@ -32,19 +90,20 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
     }
 
     ByteVector buf;
-    while (nLength>0)
+    while (dwLength>0)
     {
         buf.resize(65536);
-        DWORD nRead= fread(vectorptr(buf), 1, min(buf.size(), nLength), f);
+        DWORD dwBytesWanted= min(buf.size(), dwLength);
+        DWORD nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
 
         if (nRead==0)
             break;
 
         buf.resize(nRead);
 
-        bighexdump(dwOffset, buf, flags | (nLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
+        bighexdump(dwOffset, buf, flags | (dwLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
 
-        nLength -= nRead;
+        dwLength -= nRead;
         dwOffset += nRead;
     }
     fclose(f);
@@ -73,6 +132,7 @@ void usage()
     printf("    -o OFS    : what offset to display\n");
     printf("    -l LEN    : length to dump\n");
     printf("    -w N      : how many words to print on each line\n");
+    printf("    -s SIZE   : step with SIZE through memory\n");
     printf("    -1,2,4    : what to print: byte, word, dword\n");
     printf("    -a     : ascdump iso hexdump\n");
     printf("    -f     : full - do not summarize identical lines\n");
@@ -101,6 +161,7 @@ int main(int argc, char **argv)
             case 'l': HANDLEULOPTION(dwLength, DWORD); break;
 
             case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, DWORD); break;
+            case 's': HANDLEULOPTION(g_nStepSize, DWORD); break;
             case 'a': g_dumpformat= DUMP_STRINGS; break;
             case 'c': g_dumpformat= DUMP_RAW; break;
             case 'f': g_fulldump= true; break;
@@ -145,7 +206,10 @@ int main(int argc, char **argv)
     if (dwOffset < dwBaseOffset && dwOffset+0x80000000 > dwBaseOffset)
         dwOffset= dwBaseOffset;
 
-    Dumpfile(szFilename, dwBaseOffset, dwOffset, dwLength);
+    if (g_nStepSize)
+        StepFile(szFilename, dwBaseOffset, dwOffset, dwLength);
+    else
+        Dumpfile(szFilename, dwBaseOffset, dwOffset, dwLength);
 
     return 0;
 }
