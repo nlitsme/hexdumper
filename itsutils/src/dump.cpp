@@ -14,8 +14,10 @@ int g_nMaxWordsPerLine=-1;
 void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
 {
     FILE *f= fopen(szFilename, "rb");
-    if (f==NULL)
+    if (f==NULL) {
+        perror(szFilename);
         return;
+    }
 
     if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
     {
@@ -23,15 +25,18 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
         fclose(f);
     }
 
+    ByteVector buf;
     while (nLength>0)
     {
-        BYTE buf[4096];
-        DWORD nRead= fread(buf, 1, min(4096, nLength), f);
+        buf.resize(65536);
+        DWORD nRead= fread(vectorptr(buf), 1, min(buf.size(), nLength), f);
 
         if (nRead==0)
             break;
 
-        debug("%hs\n", hexdump(dwOffset, buf, nRead, g_nDumpUnitSize, g_nMaxWordsPerLine).c_str());
+        buf.resize(nRead);
+
+        bighexdump(dwOffset, buf, g_nDumpUnitSize, g_nMaxWordsPerLine);
 
         nLength -= nRead;
         dwOffset += nRead;
@@ -52,7 +57,7 @@ void usage()
 int main(int argc, char **argv)
 {
     DWORD dwOffset=0;
-    int nLength=0;
+    int nLength=0x1000;
     DWORD dwBaseOffset=0;
     char *szFilename=NULL;
 
