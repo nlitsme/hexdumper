@@ -1,51 +1,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include "debug.h"
-
-void hexdumpbytes(BYTE *buf, int nLength)
-{
-    while(nLength--)
-        printf(" %02x", *buf++);
-}
-void dumpascii(BYTE *buf, int nLength)
-{
-    while(nLength--)
-    {
-        BYTE c= *buf++;
-        putchar((c>=' ' && c<='~')?c:'.');
-    }
-}
-void writespaces(int n)
-{
-    while(n--)
-        putchar(' ');
-}
-
-#define HEXDUMP_WIDTH 16
-void hexdump(DWORD dwOffset, BYTE *buf, int nLength)
-{
-    while(nLength)
-    {
-        int nLineLength= min(nLength, HEXDUMP_WIDTH);
-        printf("%08lx: ", dwOffset);
-
-        hexdumpbytes(buf, nLineLength);
-        if (nLineLength<HEXDUMP_WIDTH)
-            writespaces((HEXDUMP_WIDTH-nLineLength)*3);
-
-        printf("  ");
-
-        dumpascii(buf, nLineLength);
-        if (nLineLength<HEXDUMP_WIDTH)
-            writespaces(HEXDUMP_WIDTH-nLineLength);
-
-        printf("\n");
-
-        nLength -= nLineLength;
-        dwOffset += nLineLength;
-        buf += nLineLength;
-    }
-}
+#include "args.h"
 
 void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
 {
@@ -67,7 +23,7 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
         if (nRead==0)
             break;
 
-        hexdump(dwOffset, buf, nRead);
+        hexdump(dwOffset, buf, nRead, g_nDumpUnitSize, g_nMaxWordsPerLine);
 
         nLength -= nRead;
         dwOffset += nRead;
@@ -75,6 +31,16 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
     fclose(f);
 }
 
+void usage()
+{
+    printf("Usage: dump [options]\n");
+    printf("    -b BASE   : specify base offset - what offset has first byte of the file\n");
+    printf("    -o OFS    : what offset to display\n");
+    printf("    -l LEN    : length to dump\n");
+    printf("    -f NAME   : file to dump\n");
+    printf("    -w N      : how many words to print on each line\n");
+    printf("    -1,2,4    : what to print: byte, word, dword\n");
+}
 int main(int argc, char **argv)
 {
     DWORD dwOffset=0;
@@ -82,20 +48,35 @@ int main(int argc, char **argv)
     DWORD dwBaseOffset=0;
     char *szFilename=NULL;
 
-#define HANDLEULOPTION(var, type) if (argv[i][2]) { var= (type)strtoul(argv[i]+2, 0, 0); } else { if (i+1<argc) var= (type)strtoul(argv[++i], 0, 0); }
-#define HANDLESTROPTION(var) if (argv[i][2]) { var= argv[i]+2; } else { if (i+1<argc) var= argv[++i]; }
-
+    int argsfound=0; 
     for (int i=1 ; i<argc ; i++)
     {
-        if (argv[i][0]=='-')
-            switch (argv[i][1])
-            {
-                case 'b': HANDLEULOPTION(dwBaseOffset, DWORD); break;
-                case 'o': HANDLEULOPTION(dwOffset, DWORD); break;
-                case 'l': HANDLEULOPTION(nLength, DWORD); break;
-                case 'f': HANDLESTROPTION(szFilename); break;
-            }
+        if (argv[i][0]=='-') switch (argv[i][1])
+        {
+            case 'b': HANDLEULOPTION(dwBaseOffset, DWORD); break;
+            case 'o': HANDLEULOPTION(dwOffset, DWORD); break;
+            case 'l': HANDLEULOPTION(nLength, DWORD); break;
+            case 'f': HANDLESTROPTION(szFilename); break;
+            case 'w': HANDLEULOPTION(g_nMaxWordsPerLine, DWORD); break;
+
+            case '1': case '2': case '4':
+                g_nDumpUnitSize= argv[i][1]-'0';
+                break;
+            default:
+                usage();
+                return 1;
+        }
+        else 
+            argsfound++;
     }
+    if (argsfound>0)
+    {
+        usage();
+        return 1;
+    }
+
+    if (g_nMaxWordsPerLine<0)
+        g_nMaxWordsPerLine= 16/g_nDumpUnitSize;
 
     Dumpfile(szFilename, dwBaseOffset, dwOffset, nLength);
 
