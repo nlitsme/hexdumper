@@ -1,4 +1,7 @@
-/* (C) 2003 Willem Jan Hengeveld  itsme@xs4all.nl */
+/* (C) 2003 XDA Developers  itsme@xs4all.nl
+ *
+ * $Header$
+ */
 #include <windows.h>
 #include <stdio.h>
 #include "debug.h"
