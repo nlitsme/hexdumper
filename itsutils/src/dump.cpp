@@ -69,6 +69,7 @@ void StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         dwLength -= dwStep;
         dwOffset += dwStep;
     }
+    fclose(f);
 }
 
 void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
@@ -108,6 +109,87 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
     }
     fclose(f);
 }
+
+void CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+{
+    ByteVector buffer;
+
+    FILE *f= fopen(szFilename, "rb");
+    if (f==NULL) {
+        perror(szFilename);
+        return;
+    }
+
+    if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    {
+        error("fseek");
+        fclose(f);
+    }
+    FILE *g= fopen(szDstFilename, "w+b");
+    if (g==NULL) {
+        perror(szDstFilename);
+        return;
+    }
+
+
+    while (dwLength>0)
+    {
+        buffer.resize(DumpUnitSize(g_dumpunit)*g_nMaxUnitsPerLine);
+
+        DWORD dwBytesWanted= min(dwLength, buffer.size());
+        DWORD dwNumberOfBytesRead= fread(vectorptr(buffer), 1, dwBytesWanted, f);
+        if (dwNumberOfBytesRead==0)
+            break;
+
+        fwrite(vectorptr(buffer), 1, buffer.size(), g);
+
+        DWORD dwStep= min(dwLength, g_nStepSize);
+        dwLength -= dwStep;
+        dwOffset += dwStep;
+    }
+    fclose(g);
+    fclose(f);
+}
+void Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+{
+    FILE *f= fopen(szFilename, "rb");
+    if (f==NULL) {
+        perror(szFilename);
+        return;
+    }
+
+    if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    {
+        error("fseek");
+        fclose(f);
+    }
+    FILE *g= fopen(szDstFilename, "w+b");
+    if (g==NULL) {
+        perror(szDstFilename);
+        return;
+    }
+
+    ByteVector buf;
+    while (dwLength>0)
+    {
+        buf.resize(65536);
+        DWORD dwBytesWanted= min(buf.size(), dwLength);
+        DWORD nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
+
+        if (nRead==0)
+            break;
+
+        buf.resize(nRead);
+
+        fwrite(vectorptr(buf), 1, buf.size(), g);
+
+        dwLength -= nRead;
+        dwOffset += nRead;
+    }
+
+    fclose(g);
+    fclose(f);
+}
 DWORD GetFileSize(const std::string& filename)
 {
     HANDLE hSrc = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ,
@@ -127,10 +209,12 @@ DWORD GetFileSize(const std::string& filename)
 
 void usage()
 {
-    printf("Usage: dump [options] FILENAME\n");
+    printf("Usage: dump [options] FILENAME  [OUTFILENAME]\n");
+    printf("   when outfilename is specified, the binary data is writen to it.\n");
     printf("    -b BASE   : specify base offset - what offset has first byte of the file\n");
     printf("    -o OFS    : what offset to display\n");
     printf("    -l LEN    : length to dump\n");
+    printf("    -e OFS    : end offset ( alternative for -l )\n");
     printf("    -w N      : how many words to print on each line\n");
     printf("    -s SIZE   : step with SIZE through memory\n");
     printf("    -1,2,4    : what to print: byte, word, dword\n");
@@ -144,9 +228,11 @@ void usage()
 int main(int argc, char **argv)
 {
     DWORD dwOffset=0;
+    DWORD dwEndOffset=0;
     DWORD dwLength=0;
     DWORD dwBaseOffset=0;
     char *szFilename=NULL;
+    char *szDstFilename=NULL;
     int nDumpUnitSize=1;
 
     DebugStdOut();
@@ -158,6 +244,7 @@ int main(int argc, char **argv)
         {
             case 'b': HANDLEULOPTION(dwBaseOffset, DWORD); break;
             case 'o': HANDLEULOPTION(dwOffset, DWORD); break;
+            case 'e': HANDLEULOPTION(dwEndOffset, DWORD); break;
             case 'l': HANDLEULOPTION(dwLength, DWORD); break;
 
             case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, DWORD); break;
@@ -177,10 +264,12 @@ int main(int argc, char **argv)
                 usage();
                 return 1;
         }
-        else if (argsfound++==0)
-            szFilename= argv[i];
+        else switch (argsfound++) {
+            case 0: szFilename= argv[i]; break;
+            case 1: szDstFilename= argv[i]; break;
+        }
     }
-    if (argsfound!=1)
+    if (argsfound==0 || argsfound>2)
     {
         usage();
         return 1;
@@ -200,16 +289,27 @@ int main(int argc, char **argv)
         nDumpUnitSize==2?DUMPUNIT_WORD:
         nDumpUnitSize==4?DUMPUNIT_DWORD:DUMPUNIT_BYTE;
 
+    if (dwLength==0 && dwEndOffset)
+        dwLength= dwEndOffset-dwOffset;
+
     if (dwLength==0)
         dwLength= GetFileSize(szFilename);
 
     if (dwOffset < dwBaseOffset && dwOffset+0x80000000 > dwBaseOffset)
         dwOffset= dwBaseOffset;
 
-    if (g_nStepSize)
-        StepFile(szFilename, dwBaseOffset, dwOffset, dwLength);
-    else
-        Dumpfile(szFilename, dwBaseOffset, dwOffset, dwLength);
+    if (szDstFilename) {
+        if (g_nStepSize)
+            CopyFileSteps(szFilename, szDstFilename, dwBaseOffset, dwOffset, dwLength);
+        else
+            Copyfile(szFilename, szDstFilename, dwBaseOffset, dwOffset, dwLength);
+    }
+    else {
+        if (g_nStepSize)
+            StepFile(szFilename, dwBaseOffset, dwOffset, dwLength);
+        else
+            Dumpfile(szFilename, dwBaseOffset, dwOffset, dwLength);
+    }
 
     return 0;
 }
