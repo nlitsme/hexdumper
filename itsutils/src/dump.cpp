@@ -1,3 +1,4 @@
+/* (C) 2003 Willem Jan Hengeveld  itsme@xs4all.nl */
 #include <windows.h>
 #include <stdio.h>
 #include "debug.h"
