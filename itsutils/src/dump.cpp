@@ -8,11 +8,17 @@
 #include "stringutils.h"
 #include "args.h"
 
-int g_nDumpUnitSize=1;
-int g_nMaxWordsPerLine=-1;
+DumpUnitType g_dumpunit=DUMPUNIT_BYTE;
+DumpFormat g_dumpformat= DUMP_HEX_ASCII;
+int g_nMaxUnitsPerLine=-1;
+bool g_fulldump= false;
 
 void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
 {
+    DWORD flags= hexdumpflags(g_dumpunit, g_nMaxUnitsPerLine, g_dumpformat)
+        | (g_fulldump?0:HEXDUMP_SUMMARIZE) | (g_dumpformat==DUMP_RAW?0:HEXDUMP_WITH_OFFSET);
+
+
     FILE *f= fopen(szFilename, "rb");
     if (f==NULL) {
         perror(szFilename);
@@ -36,7 +42,7 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
 
         buf.resize(nRead);
 
-        bighexdump(dwOffset, buf, g_nDumpUnitSize, g_nMaxWordsPerLine);
+        bighexdump(dwOffset, buf, flags);
 
         nLength -= nRead;
         dwOffset += nRead;
@@ -46,13 +52,18 @@ void Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, int nLength)
 
 void usage()
 {
-    printf("Usage: dump [options]\n");
+    printf("Usage: dump [options] FILENAME\n");
     printf("    -b BASE   : specify base offset - what offset has first byte of the file\n");
     printf("    -o OFS    : what offset to display\n");
     printf("    -l LEN    : length to dump\n");
-    printf("    -f NAME   : file to dump\n");
     printf("    -w N      : how many words to print on each line\n");
     printf("    -1,2,4    : what to print: byte, word, dword\n");
+    printf("    -a     : ascdump iso hexdump\n");
+    printf("    -f     : full - do not summarize identical lines\n");
+    printf("    -c     : print raw memory to stdout\n");
+    printf("    -x     : print only hex\n");
+    printf("    -xx    : print only fixed length ascii dumps\n");
+
 }
 int main(int argc, char **argv)
 {
@@ -60,6 +71,7 @@ int main(int argc, char **argv)
     int nLength=0x1000;
     DWORD dwBaseOffset=0;
     char *szFilename=NULL;
+    int nDumpUnitSize=1;
 
     DebugStdOut();
 
@@ -71,27 +83,48 @@ int main(int argc, char **argv)
             case 'b': HANDLEULOPTION(dwBaseOffset, DWORD); break;
             case 'o': HANDLEULOPTION(dwOffset, DWORD); break;
             case 'l': HANDLEULOPTION(nLength, DWORD); break;
-            case 'f': HANDLESTROPTION(szFilename); break;
-            case 'w': HANDLEULOPTION(g_nMaxWordsPerLine, DWORD); break;
 
+            case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, DWORD); break;
+            case 'a': g_dumpformat= DUMP_STRINGS; break;
+            case 'c': g_dumpformat= DUMP_RAW; break;
+            case 'f': g_fulldump= true; break;
+            case 'x': if (argv[i][2]=='x')
+                          g_dumpformat= DUMP_ASCII; 
+                      else
+                          g_dumpformat= DUMP_HEX; 
+                      break;
             case '1': case '2': case '4':
-                g_nDumpUnitSize= argv[i][1]-'0';
+                nDumpUnitSize= argv[i][1]-'0';
                 break;
             default:
                 usage();
                 return 1;
         }
-        else 
-            argsfound++;
+        else if (argsfound++==0)
+            szFilename= argv[i];
     }
-    if (argsfound>0)
+    if (argsfound!=1)
     {
         usage();
         return 1;
     }
 
-    if (g_nMaxWordsPerLine<0)
-        g_nMaxWordsPerLine= 16/g_nDumpUnitSize;
+    if (g_nMaxUnitsPerLine<0) {
+        if (g_dumpformat==DUMP_ASCII) 
+            g_nMaxUnitsPerLine= 64/nDumpUnitSize;
+        else if (g_dumpformat==DUMP_HEX) 
+            g_nMaxUnitsPerLine= 32/nDumpUnitSize;
+        else
+            g_nMaxUnitsPerLine= 16/nDumpUnitSize;
+    }
+
+    g_dumpunit= 
+        nDumpUnitSize==1?DUMPUNIT_BYTE:
+        nDumpUnitSize==2?DUMPUNIT_WORD:
+        nDumpUnitSize==4?DUMPUNIT_DWORD:DUMPUNIT_BYTE;
+
+    if (dwOffset < dwBaseOffset)
+        dwOffset= dwBaseOffset;
 
     Dumpfile(szFilename, dwBaseOffset, dwOffset, nLength);
 
