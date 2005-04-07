@@ -291,6 +291,7 @@ void usage()
     printf("    -r SIZE   : read chunk size, default 1M\n");
     printf("    -1,2,4    : what to print: byte, word, dword\n");
     printf("    -a     : ascdump iso hexdump\n");
+    printf("    -m     : print md5sum of selected memory range\n");
     printf("    -f     : full - do not summarize identical lines\n");
     printf("    -c     : print raw memory to stdout\n");
     printf("    -x     : print only hex\n");
