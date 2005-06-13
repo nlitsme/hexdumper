@@ -2,6 +2,11 @@
  *
  * $Header$
  */
+
+// todo: fix bug:
+//   dump 8000.mem -o 0x02400000 -s 0x400 -xx
+//   does not work as it should, .. offsets seem to be double from their real value.
+// 
 #include <windows.h>
 #include <stdio.h>
 #include <io.h>
