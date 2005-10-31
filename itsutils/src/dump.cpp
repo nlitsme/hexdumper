@@ -1,6 +1,6 @@
 /* (C) 2003 XDA Developers  itsme@xs4all.nl
  *
- * $Header$
+ * $Header: /var/db/cvs/xda-devtools/itsutils/src/dump.cpp,v 1.19 2005/06/13 17:43:41 itsme Exp $
  */
 
 // todo: fix bug:
@@ -371,7 +371,7 @@ int main(int argc, char **argv)
         nDumpUnitSize==4?DUMPUNIT_DWORD:DUMPUNIT_BYTE;
 
     if (dwLength==0 && strcmp(szFilename, "-")==0)
-        dwLength= -1;   // indicate to read until eof.
+        dwLength= ~0;   // indicate to read until eof.
     if (dwLength==0 && dwEndOffset)
         dwLength= dwEndOffset-dwOffset;
 
