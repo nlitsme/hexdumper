@@ -11,7 +11,8 @@
 #include <stdio.h>
 #include <io.h>
 #include <fcntl.h>
-#include "md5.h"
+#include "dump_md5.h"
+#include "dump_crc32.h"
 #include "debug.h"
 #include "stringutils.h"
 #include "args.h"
@@ -128,6 +129,11 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         }
     }
 
+    CRC32 crc;
+    if (g_dumpformat==DUMP_CRC32) {
+        crc.crc= 0;
+    }
+
     ByteVector buf;
     while (dwLength>0)
     {
@@ -146,6 +152,9 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
                 break;
             }
         }
+        else if (g_dumpformat==DUMP_CRC32) {
+            crc.add_data(vectorptr(buf), buf.size());
+        }
         else
             bighexdump(dwOffset, buf, flags | (dwLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
 
@@ -160,6 +169,9 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
             return false;
         }
         debug("%hs\n", hash_as_string(hash).c_str());
+    }
+    else if (g_dumpformat==DUMP_CRC32) {
+        debug("%08lx\n", crc.crc);
     }
     return true;
 }
@@ -296,7 +308,8 @@ void usage()
     printf("    -r SIZE   : read chunk size, default 1M\n");
     printf("    -1,2,4    : what to print: byte, word, dword\n");
     printf("    -a     : ascdump iso hexdump\n");
-    printf("    -m     : print md5sum of selected memory range\n");
+    printf("    -md5   : print md5sum of selected memory range\n");
+    printf("    -crc   : print crc32 of selected memory range\n");
     printf("    -f     : full - do not summarize identical lines\n");
     printf("    -c     : print raw memory to stdout\n");
     printf("    -x     : print only hex\n");
@@ -329,9 +342,15 @@ int main(int argc, char **argv)
 
             case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, DWORD); break;
             case 's': HANDLEULOPTION(g_nStepSize, DWORD); break;
-            case 'm': g_dumpformat= DUMP_MD5; break;
+            case 'm': if (strcmp(argv[i]+1, "md5")==0) 
+                          g_dumpformat= DUMP_MD5; 
+                      break;
             case 'a': g_dumpformat= DUMP_STRINGS; break;
-            case 'c': g_dumpformat= DUMP_RAW; break;
+            case 'c': if (strcmp(argv[i]+1, "crc")==0) 
+                          g_dumpformat= DUMP_CRC32; 
+                      else
+                          g_dumpformat= DUMP_RAW; 
+                      break;
             case 'f': g_fulldump= true; break;
             case 'x': if (argv[i][2]=='x')
                           g_dumpformat= DUMP_ASCII; 
@@ -371,7 +390,7 @@ int main(int argc, char **argv)
         nDumpUnitSize==4?DUMPUNIT_DWORD:DUMPUNIT_BYTE;
 
     if (dwLength==0 && strcmp(szFilename, "-")==0)
-        dwLength= ~0;   // indicate to read until eof.
+        dwLength= MAXDWORD;
     if (dwLength==0 && dwEndOffset)
         dwLength= dwEndOffset-dwOffset;
 
