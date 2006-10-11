@@ -11,7 +11,7 @@
 #include <stdio.h>
 #include <io.h>
 #include <fcntl.h>
-#include "dump_md5.h"
+#include "dump_hash.h"
 #include "dump_crc32.h"
 #include "debug.h"
 #include "stringutils.h"
@@ -121,12 +121,14 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         fclose(f);
     }
 
-    MD5 md5;
-    if (g_dumpformat==DUMP_MD5) {
-        if (!md5.InitHash()) {
-            error("MD5.init");
-            return false;
-        }
+    CryptHash hashcalc;
+    if (
+            (g_dumpformat==DUMP_MD5 && !hashcalc.InitHash(CryptHash::MD5))
+         || (g_dumpformat==DUMP_SHA1 && !hashcalc.InitHash(CryptHash::SHA1))
+         || (g_dumpformat==DUMP_SHA256 && !hashcalc.InitHash(CryptHash::SHA256))
+        ) {
+        error("CryptHash.init");
+        return false;
     }
 
     CRC32 crc;
@@ -146,9 +148,9 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
 
         buf.resize(nRead);
 
-        if (g_dumpformat==DUMP_MD5) {
-            if (!md5.AddData(buf)) {
-                error("MD5.add");
+        if (g_dumpformat==DUMP_MD5 || g_dumpformat==DUMP_SHA1 || g_dumpformat==DUMP_SHA256) {
+            if (!hashcalc.AddData(buf)) {
+                error("CryptHash.add");
                 break;
             }
         }
@@ -162,10 +164,10 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         dwOffset += nRead;
     }
     fclose(f);
-    if (g_dumpformat==DUMP_MD5) {
+    if (g_dumpformat==DUMP_MD5 || g_dumpformat==DUMP_SHA1 || g_dumpformat==DUMP_SHA256) {
         ByteVector hash;
-        if (!md5.GetHash(hash)) {
-            error("MD5.final");
+        if (!hashcalc.GetHash(hash)) {
+            error("CryptHash.final");
             return false;
         }
         debug("%hs\n", hash_as_string(hash).c_str());
@@ -309,6 +311,8 @@ void usage()
     printf("    -1,2,4    : what to print: byte, word, dword\n");
     printf("    -a     : ascdump iso hexdump\n");
     printf("    -md5   : print md5sum of selected memory range\n");
+    printf("    -sha1  : print sha1 of selected memory range\n");
+    printf("    -sha256: print sha256 of selected memory range\n");
     printf("    -crc   : print crc32 of selected memory range\n");
     printf("    -f     : full - do not summarize identical lines\n");
     printf("    -c     : print raw memory to stdout\n");
@@ -341,7 +345,13 @@ int main(int argc, char **argv)
             case 'r': HANDLEULOPTION(g_chunksize, DWORD); break;
 
             case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, DWORD); break;
-            case 's': HANDLEULOPTION(g_nStepSize, DWORD); break;
+            case 's': if (strcmp(argv[i]+1, "sha1")==0)
+                          g_dumpformat= DUMP_SHA1;
+                      else if (strcmp(argv[i]+1, "sha256")==0)
+                          g_dumpformat= DUMP_SHA256;
+                      else
+                          HANDLEULOPTION(g_nStepSize, DWORD);
+                      break;
             case 'm': if (strcmp(argv[i]+1, "md5")==0) 
                           g_dumpformat= DUMP_MD5; 
                       break;
