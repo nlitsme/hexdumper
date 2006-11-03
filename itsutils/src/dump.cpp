@@ -6,6 +6,11 @@
 // todo: fix bug:
 //   dump 8000.mem -o 0x02400000 -s 0x400 -xx
 //   does not work as it should, .. offsets seem to be double from their real value.
+//
+// todo:
+//    think of way to make winxp support sha256
+//    add simple add-checksum , and xor-checksum support
+//
 // 
 #include <windows.h>
 #include <stdio.h>
@@ -13,12 +18,16 @@
 #include <fcntl.h>
 #include "dump_hash.h"
 #include "dump_crc32.h"
+#include "dump_sum.h"
 #include "debug.h"
 #include "stringutils.h"
 #include "args.h"
 
 DumpUnitType g_dumpunit=DUMPUNIT_BYTE;
 DumpFormat g_dumpformat= DUMP_HEX_ASCII;
+unsigned long g_crc_initval= 0;
+unsigned long g_crc_poly= 0xEDB88320;
+
 int g_nMaxUnitsPerLine=-1;
 DWORD g_nStepSize= 0;
 bool g_fulldump= false;
@@ -131,10 +140,8 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         return false;
     }
 
-    CRC32 crc;
-    if (g_dumpformat==DUMP_CRC32) {
-        crc.crc= 0;
-    }
+    DATASUM sum;
+    CRC32 crc(g_crc_initval, g_crc_poly);
 
     ByteVector buf;
     while (dwLength>0)
@@ -157,6 +164,9 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         else if (g_dumpformat==DUMP_CRC32) {
             crc.add_data(vectorptr(buf), buf.size());
         }
+        else if (g_dumpformat==DUMP_SUM) {
+            sum.add_data(vectorptr(buf), buf.size());
+        }
         else
             bighexdump(dwOffset, buf, flags | (dwLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
 
@@ -174,6 +184,10 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
     }
     else if (g_dumpformat==DUMP_CRC32) {
         debug("%08lx\n", crc.crc);
+    }
+    else if (g_dumpformat==DUMP_SUM) {
+        debug("addsum=%02x %04x %08lx  sumxor=%02x %04x %08lx\n", 
+                sum.sum1, sum.sum2, sum.sum4, sum.sumxor1, sum.sumxor2, sum.sumxor4);
     }
     return true;
 }
@@ -349,6 +363,8 @@ int main(int argc, char **argv)
                           g_dumpformat= DUMP_SHA1;
                       else if (strcmp(argv[i]+1, "sha256")==0)
                           g_dumpformat= DUMP_SHA256;
+                      else if (strcmp(argv[i]+1, "sum")==0)
+                          g_dumpformat= DUMP_SUM;
                       else
                           HANDLEULOPTION(g_nStepSize, DWORD);
                       break;
@@ -356,8 +372,19 @@ int main(int argc, char **argv)
                           g_dumpformat= DUMP_MD5; 
                       break;
             case 'a': g_dumpformat= DUMP_STRINGS; break;
-            case 'c': if (strcmp(argv[i]+1, "crc")==0) 
+            case 'c': if (strncmp(argv[i]+1, "crc", 3)==0) {
                           g_dumpformat= DUMP_CRC32; 
+                          if (argv[i][4]) {
+                              char *colon= strchr(argv[i], ':');
+                              if (colon) {
+                                  g_crc_initval= strtoul(colon+1, NULL, 0);
+                                  colon = strchr(colon+1, ':');
+                                  if (colon) {
+                                      g_crc_poly= strtoul(colon+1, NULL, 0);
+                                  }
+                              }
+                          }
+                      }
                       else
                           g_dumpformat= DUMP_RAW; 
                       break;
