@@ -1,8 +1,6 @@
-#ifndef __CRC_H__
-#define __CRC_H__
+#ifndef __DUMP_CRC32_H__
+#define __DUMP_CRC32_H__
 
-// todo: resolve confusion with ../common/crc32.h, ../common/crc32.cpp
-//
 class CRC32 {
 public:
     unsigned long crc;
