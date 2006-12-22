@@ -183,11 +183,11 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         debug("%hs\n", hash_as_string(hash).c_str());
     }
     else if (g_dumpformat==DUMP_CRC32) {
-        debug("%08lx\n", crc.crc);
+        debug("crc=%08lx invcrc=%08lx\n", crc.crc, ~crc.crc);
     }
     else if (g_dumpformat==DUMP_SUM) {
-        debug("addsum=%02x %04x %08lx  sumxor=%02x %04x %08lx\n", 
-                sum.sum1, sum.sum2, sum.sum4, sum.sumxor1, sum.sumxor2, sum.sumxor4);
+        debug("addsum=%02x LE:%04x %08lx  BE:%04x %08lx  sumxor=%02x %04x %08lx\n", 
+                sum.sum1, sum.sum2_le, sum.sum4_le, sum.sum2_be, sum.sum4_be, sum.sumxor1, sum.sumxor2, sum.sumxor4);
     }
     return true;
 }
@@ -425,6 +425,13 @@ int main(int argc, char **argv)
         nDumpUnitSize==1?DUMPUNIT_BYTE:
         nDumpUnitSize==2?DUMPUNIT_WORD:
         nDumpUnitSize==4?DUMPUNIT_DWORD:DUMPUNIT_BYTE;
+
+    if (g_dumpformat==DUMP_RAW) {
+        if (-1==_setmode( _fileno( stdout ), _O_BINARY )) {
+            error("_setmode(stdout, rb)");
+            return false;
+        }
+    }
 
     if (dwLength==0 && strcmp(szFilename, "-")==0)
         dwLength= MAXDWORD;
