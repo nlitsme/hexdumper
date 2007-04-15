@@ -1,6 +1,11 @@
-/* (C) 2003 XDA Developers  itsme@xs4all.nl
+/* (C) 2003-2007 Willem Jan Hengeveld <itsme@xs4all.nl>
+ * Web: http://www.xs4all.nl/~itsme/
+ *      http://wiki.xda-developers.com/
  *
- * $Header: /var/db/cvs/xda-devtools/itsutils/src/dump.cpp,v 1.19 2005/06/13 17:43:41 itsme Exp $
+ * $Id$
+ *
+ * this program provides various ways of (hex) dumping sections of binary files
+ *
  */
 
 // todo: fix bug:
@@ -85,7 +90,7 @@ bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
             fwrite(vectorptr(buffer), 1, buffer.size(), stdout);
         else if (!g_fulldump && line == prevline) {
             if (!bSamePrinted && line != " * * * * * *\n")
-                printf("*\n", dwOffset);
+                printf("*\n");
             bSamePrinted= true;
         }
         else {
