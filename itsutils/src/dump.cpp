@@ -172,6 +172,8 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         else if (g_dumpformat==DUMP_SUM) {
             sum.add_data(vectorptr(buf), buf.size());
         }
+        else if (g_dumpformat==DUMP_RAW)
+            fwrite(vectorptr(buf), 1, buf.size(), stdout);
         else
             bighexdump(dwOffset, buf, flags | (dwLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
 
