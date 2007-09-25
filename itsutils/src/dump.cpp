@@ -100,6 +100,11 @@ bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         }
         prevline= line;
         DWORD dwStep= min(dwLength, g_nStepSize);
+        if (fseek(f, dwStep-dwNumberOfBytesRead, SEEK_CUR))
+        {
+            error("fseek");
+            fclose(f);
+        }
         dwLength -= dwStep;
         dwOffset += dwStep;
     }
