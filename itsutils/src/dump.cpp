@@ -13,15 +13,21 @@
 //   does not work as it should, .. offsets seem to be double from their real value.
 //
 // todo:
-//    think of way to make winxp support sha256
-//    add simple add-checksum , and xor-checksum support
+//    * think of way to make winxp support sha256
+//    * DONE add simple add-checksum , and xor-checksum support
+//    * make '*' summary only print '*' when more than X lines are the same
 //
 // 
 #include <windows.h>
 #include <stdio.h>
 #include <io.h>
 #include <fcntl.h>
+#ifdef _USE_WINCRYPTAPI
 #include "dump_hash.h"
+#endif
+#ifdef _USE_OPENSSL
+#include "dump_ossl_hash.h"
+#endif
 #include "dump_crc32.h"
 #include "dump_sum.h"
 #include "debug.h"
@@ -30,6 +36,7 @@
 
 DumpUnitType g_dumpunit=DUMPUNIT_BYTE;
 DumpFormat g_dumpformat= DUMP_HEX_ASCII;
+int g_hashtype= 0;
 unsigned long g_crc_initval= 0;
 unsigned long g_crc_poly= 0xEDB88320;
 
@@ -140,18 +147,41 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         fclose(f);
     }
 
+#ifdef _USE_WINCRYPTAPI
+	CryptProvider cprov;
+    CryptHash hashcalc(cprov);
+#define HASHTYPEOFFSET (ALG_CLASS_HASH | ALG_TYPE_ANY)
+#else
     CryptHash hashcalc;
-    if (
-            (g_dumpformat==DUMP_MD5 && !hashcalc.InitHash(CryptHash::MD5))
-         || (g_dumpformat==DUMP_SHA1 && !hashcalc.InitHash(CryptHash::SHA1))
-         || (g_dumpformat==DUMP_SHA256 && !hashcalc.InitHash(CryptHash::SHA256))
-        ) {
+#define HASHTYPEOFFSET 0
+#endif
+    if (g_dumpformat==DUMP_HASH && !hashcalc.InitHash(g_hashtype)) {
         error("CryptHash.init");
         return false;
+    }
+typedef std::vector<CryptHash*> CryptHashList;
+    CryptHashList hashes;
+    if (g_dumpformat==DUMP_HASHES) {
+
+#define VALIDALGS 0x701e
+        for (int ihash=0 ; ihash<15  ; ihash++) {
+#ifdef _USE_WINCRYPTAPI
+            if (((1<<ihash)&VALIDALGS)==0)
+                continue;
+            hashes.push_back(new CryptHash(cprov));
+#else
+            hashes.push_back(new CryptHash);
+#endif
+			if (!hashes.back()->InitHash(ihash+HASHTYPEOFFSET)) {
+				delete hashes.back();
+                hashes.resize(hashes.size()-1);
+			}
+        }
     }
 
     DATASUM sum;
     CRC32 crc(g_crc_initval, g_crc_poly);
+    CRC32 crc1(-1, g_crc_poly);
 
     ByteVector buf;
     while (dwLength>0)
@@ -165,10 +195,16 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
 
         buf.resize(nRead);
 
-        if (g_dumpformat==DUMP_MD5 || g_dumpformat==DUMP_SHA1 || g_dumpformat==DUMP_SHA256) {
+        if (g_dumpformat==DUMP_HASH) {
             if (!hashcalc.AddData(buf)) {
                 error("CryptHash.add");
                 break;
+            }
+        }
+        else if (g_dumpformat==DUMP_HASHES) {
+            for (CryptHashList::iterator ih= hashes.begin() ; ih!=hashes.end() ; ih++)
+            {
+                (*ih)->AddData(buf);
             }
         }
         else if (g_dumpformat==DUMP_CRC32) {
@@ -176,6 +212,8 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         }
         else if (g_dumpformat==DUMP_SUM) {
             sum.add_data(vectorptr(buf), buf.size());
+            crc.add_data(vectorptr(buf), buf.size());
+            crc1.add_data(vectorptr(buf), buf.size());
         }
         else if (g_dumpformat==DUMP_RAW)
             fwrite(vectorptr(buf), 1, buf.size(), stdout);
@@ -186,7 +224,7 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         dwOffset += nRead;
     }
     fclose(f);
-    if (g_dumpformat==DUMP_MD5 || g_dumpformat==DUMP_SHA1 || g_dumpformat==DUMP_SHA256) {
+    if (g_dumpformat==DUMP_HASH) {
         ByteVector hash;
         if (!hashcalc.GetHash(hash)) {
             error("CryptHash.final");
@@ -194,10 +232,24 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         }
         debug("%hs\n", hash_as_string(hash).c_str());
     }
+    else if (g_dumpformat==DUMP_HASHES) {
+        for (CryptHashList::iterator ih= hashes.begin() ; ih!=hashes.end() ; ih++)
+        {
+            ByteVector hash;
+            if (!(*ih)->GetHash(hash)) {
+                error("Gethash(%08lx - %s)", (*ih)->hashtype(), (*ih)->hashname().c_str());
+            }
+            else {
+                debug("%-10s: %hs\n", (*ih)->hashname().c_str(), hash_as_string(hash).c_str());
+            }
+        }
+    }
     else if (g_dumpformat==DUMP_CRC32) {
         debug("crc=%08lx invcrc=%08lx\n", crc.crc, ~crc.crc);
     }
     else if (g_dumpformat==DUMP_SUM) {
+        debug("crc0=%08lx invcrc=%08lx\n", crc.crc, ~crc.crc);
+        debug("crc-1=%08lx invcrc=%08lx\n", crc1.crc, ~crc1.crc);
         debug("addsum=%02x LE:%04x %08lx  BE:%04x %08lx  sumxor=%02x %04x %08lx\n", 
                 sum.sum1, sum.sum2_le, sum.sum4_le, sum.sum2_be, sum.sum4_be, sum.sumxor1, sum.sumxor2, sum.sumxor4);
     }
@@ -340,6 +392,7 @@ void usage()
     printf("    -sha1  : print sha1 of selected memory range\n");
     printf("    -sha256: print sha256 of selected memory range\n");
     printf("    -crc   : print crc32 of selected memory range\n");
+    printf("    -h     : calc all known hash types\n");
     printf("    -f     : full - do not summarize identical lines\n");
     printf("    -c     : print raw memory to stdout\n");
     printf("    -x     : print only hex\n");
@@ -364,6 +417,7 @@ int main(int argc, char **argv)
         if (argv[i][0]=='-' && argv[i][1]) switch (argv[i][1])
         {
             case 'b': HANDLEULOPTION(dwBaseOffset, DWORD); break;
+            case 'h': g_dumpformat= DUMP_HASHES; break;
             case 'o': HANDLEULOPTION(dwOffset, DWORD); break;
             case 'e': HANDLEULOPTION(dwEndOffset, DWORD); break;
             case 'l': HANDLEULOPTION(dwLength, DWORD); break;
@@ -371,17 +425,39 @@ int main(int argc, char **argv)
             case 'r': HANDLEULOPTION(g_chunksize, DWORD); break;
 
             case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, DWORD); break;
-            case 's': if (strcmp(argv[i]+1, "sha1")==0)
-                          g_dumpformat= DUMP_SHA1;
-                      else if (strcmp(argv[i]+1, "sha256")==0)
-                          g_dumpformat= DUMP_SHA256;
+            case 's': if (strcmp(argv[i]+1, "sha1")==0) {
+                          g_dumpformat= DUMP_HASH;
+                          g_hashtype= CryptHash::SHA1;
+                      }
+                      else if (strcmp(argv[i]+1, "sha256")==0) {
+                          g_dumpformat= DUMP_HASH;
+                          g_hashtype= CryptHash::SHA256;
+                      }
+                      else if (strcmp(argv[i]+1, "sha384")==0) {
+                          g_dumpformat= DUMP_HASH;
+                          g_hashtype= CryptHash::SHA384;
+                      }
+                      else if (strcmp(argv[i]+1, "sha512")==0) {
+                          g_dumpformat= DUMP_HASH;
+                          g_hashtype= CryptHash::SHA512;
+                      }
                       else if (strcmp(argv[i]+1, "sum")==0)
                           g_dumpformat= DUMP_SUM;
                       else
                           HANDLEULOPTION(g_nStepSize, DWORD);
                       break;
-            case 'm': if (strcmp(argv[i]+1, "md5")==0) 
-                          g_dumpformat= DUMP_MD5; 
+            case 'm': if (strcmp(argv[i]+1, "md5")==0) {
+                          g_dumpformat= DUMP_HASH; 
+                          g_hashtype= CryptHash::MD5;
+                      }
+                      else if (strcmp(argv[i]+1, "md2")==0) {
+                          g_dumpformat= DUMP_HASH; 
+                          g_hashtype= CryptHash::MD2;
+                      }
+                      else if (strcmp(argv[i]+1, "md4")==0) {
+                          g_dumpformat= DUMP_HASH; 
+                          g_hashtype= CryptHash::MD4;
+                      }
                       break;
             case 'a': g_dumpformat= DUMP_STRINGS; break;
             case 'c': if (strncmp(argv[i]+1, "crc", 3)==0) {

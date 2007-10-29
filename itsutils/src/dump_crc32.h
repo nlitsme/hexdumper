@@ -7,7 +7,7 @@ public:
     unsigned long crc32tab[256];
     CRC32(unsigned long crc=0, unsigned long poly= 0xEDB88320) : crc(crc) 
     {
-        for (int i=0 ; i<256 ; i++)
+        for (unsigned long i=0 ; i<256 ; i++)
             crc32tab[i]= calccrc32tab(i, poly);
     }
     static unsigned long calccrc32tab(unsigned long c, unsigned long poly)
