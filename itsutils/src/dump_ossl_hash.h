@@ -22,16 +22,39 @@ struct hashdefinition {
 };
 
 typedef SHA512_CTX SHA384_CTX;
+typedef SHA256_CTX SHA224_CTX;
 
 struct hashdefinition hashdefs[]= {
+#ifdef MD2_DIGEST_LENGTH
 {"MD2",   sizeof(MD2_CTX), MD2_DIGEST_LENGTH, (PFN_Init)MD2_Init, (PFN_Update)MD2_Update, (PFN_Final)MD2_Final, MD2},
+#endif
+#ifdef MD4_DIGEST_LENGTH
 {"MD4",   sizeof(MD4_CTX), MD4_DIGEST_LENGTH, (PFN_Init)MD4_Init, (PFN_Update)MD4_Update, (PFN_Final)MD4_Final, MD4},
+#endif
+#ifdef MD5_DIGEST_LENGTH
 {"MD5",   sizeof(MD5_CTX), MD5_DIGEST_LENGTH, (PFN_Init)MD5_Init, (PFN_Update)MD5_Update, (PFN_Final)MD5_Final, MD5},
+#endif
+#ifdef SHA_DIGEST_LENGTH
 {"SHA",   sizeof(SHA_CTX), SHA_DIGEST_LENGTH, (PFN_Init)SHA_Init, (PFN_Update)SHA_Update, (PFN_Final)SHA_Final, SHA},
+#endif
+#ifdef SHA1_DIGEST_LENGTH
+{"SHA",   sizeof(SHA1_CTX), SHA1_DIGEST_LENGTH, (PFN_Init)SHA1_Init, (PFN_Update)SHA1_Update, (PFN_Final)SHA1_Final, SHA},
+#endif
+#ifdef SHA224_DIGEST_LENGTH
+{"SHA224",   sizeof(SHA224_CTX), SHA224_DIGEST_LENGTH, (PFN_Init)SHA224_Init, (PFN_Update)SHA224_Update, (PFN_Final)SHA224_Final, SHA224 },
+#endif
+#ifdef SHA256_DIGEST_LENGTH
 {"SHA256",   sizeof(SHA256_CTX), SHA256_DIGEST_LENGTH, (PFN_Init)SHA256_Init, (PFN_Update)SHA256_Update, (PFN_Final)SHA256_Final, SHA256 },
+#endif
+#ifdef SHA384_DIGEST_LENGTH
 {"SHA384",   sizeof(SHA384_CTX), SHA384_DIGEST_LENGTH, (PFN_Init)SHA384_Init, (PFN_Update)SHA384_Update, (PFN_Final)SHA384_Final, SHA384 },
+#endif
+#ifdef SHA512_DIGEST_LENGTH
 {"SHA512",   sizeof(SHA512_CTX), SHA512_DIGEST_LENGTH, (PFN_Init)SHA512_Init, (PFN_Update)SHA512_Update, (PFN_Final)SHA512_Final, SHA512 },
+#endif
+#ifdef RIPEMD160_DIGEST_LENGTH
 {"RIPEMD160",   sizeof(RIPEMD160_CTX), RIPEMD160_DIGEST_LENGTH, (PFN_Init)RIPEMD160_Init, (PFN_Update)RIPEMD160_Update, (PFN_Final)RIPEMD160_Final, RIPEMD160 },
+#endif
 };
 #define NRHASHTYPES (sizeof(hashdefs)/sizeof(*hashdefs))
 class CryptHash {

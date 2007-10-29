@@ -21,6 +21,9 @@
 #include <windows.h>
 #include <stdio.h>
 #include <io.h>
+#ifndef WIN32
+#include <sys/stat.h>
+#endif
 #include <fcntl.h>
 #ifdef _USE_WINCRYPTAPI
 #include "dump_hash.h"
@@ -45,6 +48,19 @@ DWORD g_nStepSize= 0;
 bool g_fulldump= false;
 DWORD g_chunksize= 1024*1024;
 
+// skipbytes is used for non-seekable files ( like stdin )
+void skipbytes(FILE *f, size_t skip)
+{
+    ByteVector buf;
+    buf.resize(max(skip, (size_t)0x100000));
+
+    while (skip) {
+        size_t want= min(skip, buf.size());
+        fread(vectorptr(buf), 1, want, f);
+        skip-=want;
+    }
+}
+
 bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
 {
     ByteVector buffer;
@@ -54,10 +70,12 @@ bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
     FILE *f= NULL;
     if (strcmp(szFilename, "-")==0) {
         f= stdin;
+#ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
             error("_setmode(stdin, rb)");
             return false;
         }
+#endif
     }
     else {
         f= fopen(szFilename, "rb");
@@ -68,7 +86,10 @@ bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         return false;
     }
 
-    if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    if (f==stdin) {
+        skipbytes(f, dwOffset-dwBaseOffset);
+    }
+    else if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
     {
         error("fseek");
         fclose(f);
@@ -78,7 +99,7 @@ bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
     {
         buffer.resize(DumpUnitSize(g_dumpunit)*g_nMaxUnitsPerLine);
 
-        DWORD dwBytesWanted= min(dwLength, buffer.size());
+        DWORD dwBytesWanted= min((size_t)dwLength, buffer.size());
         std::string line;
         DWORD dwNumberOfBytesRead= fread(vectorptr(buffer), 1, dwBytesWanted, f);
         if (dwNumberOfBytesRead==0)
@@ -103,11 +124,14 @@ bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         else {
             bSamePrinted= false;
 
-            printf("%08lx: %hs", dwOffset, line.c_str());
+            printf("%08lx: %s", dwOffset, line.c_str());
         }
         prevline= line;
         DWORD dwStep= min(dwLength, g_nStepSize);
-        if (fseek(f, dwStep-dwNumberOfBytesRead, SEEK_CUR))
+	if (f==stdin) {
+            skipbytes(f, dwStep-dwNumberOfBytesRead);
+	}
+	else if (fseek(f, dwStep-dwNumberOfBytesRead, SEEK_CUR))
         {
             error("fseek");
             fclose(f);
@@ -128,10 +152,12 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
     FILE *f= NULL;
     if (strcmp(szFilename, "-")==0) {
         f= stdin;
+#ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
             error("_setmode(stdin, rb)");
             return false;
         }
+#endif
     }
     else {
         f= fopen(szFilename, "rb");
@@ -141,7 +167,10 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         return false;
     }
 
-    if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    if (f==stdin) {
+        skipbytes(f, dwOffset-dwBaseOffset);
+    }
+    else if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
     {
         error("fseek");
         fclose(f);
@@ -187,7 +216,7 @@ typedef std::vector<CryptHash*> CryptHashList;
     while (dwLength>0)
     {
         buf.resize(g_chunksize);
-        DWORD dwBytesWanted= min(buf.size(), dwLength);
+        DWORD dwBytesWanted= min(buf.size(), (size_t)dwLength);
         DWORD nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
 
         if (nRead==0)
@@ -230,7 +259,7 @@ typedef std::vector<CryptHash*> CryptHashList;
             error("CryptHash.final");
             return false;
         }
-        debug("%hs\n", hash_as_string(hash).c_str());
+        debug("%s\n", hash_as_string(hash).c_str());
     }
     else if (g_dumpformat==DUMP_HASHES) {
         for (CryptHashList::iterator ih= hashes.begin() ; ih!=hashes.end() ; ih++)
@@ -240,7 +269,7 @@ typedef std::vector<CryptHash*> CryptHashList;
                 error("Gethash(%08lx - %s)", (*ih)->hashtype(), (*ih)->hashname().c_str());
             }
             else {
-                debug("%-10s: %hs\n", (*ih)->hashname().c_str(), hash_as_string(hash).c_str());
+                debug("%-10s: %s\n", (*ih)->hashname().c_str(), hash_as_string(hash).c_str());
             }
         }
     }
@@ -263,10 +292,12 @@ bool CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DW
     FILE *f= NULL;
     if (strcmp(szFilename, "-")==0) {
         f= stdin;
+#ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
             error("_setmode(stdin, rb)");
             return false;
         }
+#endif
     }
     else {
         f= fopen(szFilename, "rb");
@@ -276,7 +307,10 @@ bool CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DW
         return false;
     }
 
-    if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    if (f==stdin) {
+        skipbytes(f, dwOffset-dwBaseOffset);
+    }
+    else if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
     {
         error("fseek");
         fclose(f);
@@ -292,7 +326,7 @@ bool CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DW
     {
         buffer.resize(DumpUnitSize(g_dumpunit)*g_nMaxUnitsPerLine);
 
-        DWORD dwBytesWanted= min(dwLength, buffer.size());
+        DWORD dwBytesWanted= min((size_t)dwLength, buffer.size());
         DWORD dwNumberOfBytesRead= fread(vectorptr(buffer), 1, dwBytesWanted, f);
         if (dwNumberOfBytesRead==0)
             break;
@@ -312,10 +346,12 @@ bool Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
     FILE *f= NULL;
     if (strcmp(szFilename, "-")==0) {
         f= stdin;
+#ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
             error("_setmode(stdin, rb)");
             return false;
         }
+#endif
     }
     else {
         f= fopen(szFilename, "rb");
@@ -325,7 +361,10 @@ bool Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
         return false;
     }
 
-    if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    if (f==stdin) {
+        skipbytes(f, dwOffset-dwBaseOffset);
+    }
+    else if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
     {
         error("fseek");
         fclose(f);
@@ -340,7 +379,7 @@ bool Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
     while (dwLength>0)
     {
         buf.resize(g_chunksize);
-        DWORD dwBytesWanted= min(buf.size(), dwLength);
+        DWORD dwBytesWanted= min(buf.size(), (size_t)dwLength);
         DWORD nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
 
         if (nRead==0)
@@ -360,11 +399,12 @@ bool Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
 }
 DWORD GetFileSize(const std::string& filename)
 {
+#ifdef WIN32
     HANDLE hSrc = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ,
                 NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (INVALID_HANDLE_VALUE == hSrc)
     {
-        error("Unable to open file %hs", filename.c_str());
+        error("Unable to open file %s", filename.c_str());
         return 0;
     }
 
@@ -373,6 +413,14 @@ DWORD GetFileSize(const std::string& filename)
     CloseHandle(hSrc);
 
     return dwSize;
+#else
+    struct stat st;
+    if (lstat(filename.c_str(), &st)) {
+	    error("lstat");
+	    return 0;
+    }
+    return st.st_size;
+#endif
 }
 
 void usage()
@@ -515,10 +563,12 @@ int main(int argc, char **argv)
         nDumpUnitSize==4?DUMPUNIT_DWORD:DUMPUNIT_BYTE;
 
     if (g_dumpformat==DUMP_RAW) {
+#ifdef WIN32
         if (-1==_setmode( _fileno( stdout ), _O_BINARY )) {
             error("_setmode(stdout, rb)");
             return false;
         }
+#endif
     }
 
     if (dwLength==0 && strcmp(szFilename, "-")==0)
