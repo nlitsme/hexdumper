@@ -210,7 +210,7 @@ typedef std::vector<CryptHash*> CryptHashList;
 
     DATASUM sum;
     CRC32 crc(g_crc_initval, g_crc_poly);
-    CRC32 crc1(-1, g_crc_poly);
+    CRC32 crc1(~0, g_crc_poly);
 
     ByteVector buf;
     while (dwLength>0)
