@@ -400,7 +400,7 @@ bool Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
 DWORD GetFileSize(const std::string& filename)
 {
 #ifdef WIN32
-    HANDLE hSrc = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_READ,
+    HANDLE hSrc = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_WRITE|FILE_SHARE_READ,
                 NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (INVALID_HANDLE_VALUE == hSrc)
     {
