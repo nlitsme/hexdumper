@@ -21,8 +21,12 @@ struct hashdefinition {
     unsigned char *(*calc)(const unsigned char *data, size_t len, unsigned char *hash);
 };
 
+#ifdef SHA512_DIGEST_LENGTH
 typedef SHA512_CTX SHA384_CTX;
+#endif
+#ifdef SHA256_DIGEST_LENGTH
 typedef SHA256_CTX SHA224_CTX;
+#endif
 
 struct hashdefinition hashdefs[]= {
 #ifdef MD2_DIGEST_LENGTH
