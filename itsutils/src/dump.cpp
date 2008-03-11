@@ -425,6 +425,7 @@ DWORD GetFileSize(const std::string& filename)
 
 void usage()
 {
+    printf("(C) 2003-2008 Willem jan Hengeveld  itsme@xs4all.nl\n");
     printf("Usage: dump [options] FILENAME  [OUTFILENAME]\n");
     printf("   when outfilename is specified, the binary data is writen to it.\n");
     printf("    -b BASE   : specify base offset - what offset has first byte of the file\n");
