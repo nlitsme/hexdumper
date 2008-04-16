@@ -21,11 +21,16 @@ struct hashdefinition {
     unsigned char *(*calc)(const unsigned char *data, size_t len, unsigned char *hash);
 };
 
+// some defs to make the openssl interface more consistent
 #ifdef SHA512_DIGEST_LENGTH
 typedef SHA512_CTX SHA384_CTX;
 #endif
 #ifdef SHA256_DIGEST_LENGTH
 typedef SHA256_CTX SHA224_CTX;
+#endif
+#ifndef OPENSSL_NO_SHA1
+#define SHA1_DIGEST_LENGTH SHA_DIGEST_LENGTH
+typedef SHA_CTX SHA1_CTX;
 #endif
 
 struct hashdefinition hashdefs[]= {
@@ -42,7 +47,7 @@ struct hashdefinition hashdefs[]= {
 {"SHA",   sizeof(SHA_CTX), SHA_DIGEST_LENGTH, (PFN_Init)SHA_Init, (PFN_Update)SHA_Update, (PFN_Final)SHA_Final, SHA},
 #endif
 #ifdef SHA1_DIGEST_LENGTH
-{"SHA",   sizeof(SHA1_CTX), SHA1_DIGEST_LENGTH, (PFN_Init)SHA1_Init, (PFN_Update)SHA1_Update, (PFN_Final)SHA1_Final, SHA},
+{"SHA1",   sizeof(SHA1_CTX), SHA1_DIGEST_LENGTH, (PFN_Init)SHA1_Init, (PFN_Update)SHA1_Update, (PFN_Final)SHA1_Final, SHA},
 #endif
 #ifdef SHA224_DIGEST_LENGTH
 {"SHA224",   sizeof(SHA224_CTX), SHA224_DIGEST_LENGTH, (PFN_Init)SHA224_Init, (PFN_Update)SHA224_Update, (PFN_Final)SHA224_Final, SHA224 },
@@ -66,7 +71,36 @@ private:
     int m_type;
     ByteVector m_state;
 public:
-    enum { MD2, MD4, MD5, SHA1, SHA256, SHA384, SHA512, RIPEMD160 }; 
+    enum { 
+#ifdef MD2_DIGEST_LENGTH
+	    MD2,
+#endif
+#ifdef MD4_DIGEST_LENGTH
+            MD4,
+#endif
+#ifdef MD5_DIGEST_LENGTH
+            MD5,
+#endif
+#ifdef SHA_DIGEST_LENGTH
+            SHA,
+#endif
+#ifdef SHA1_DIGEST_LENGTH
+            SHA1,
+#endif
+#ifdef SHA224_DIGEST_LENGTH
+            SHA224,
+#endif
+#ifdef SHA256_DIGEST_LENGTH
+            SHA256,
+#endif
+#ifdef SHA384_DIGEST_LENGTH
+            SHA384,
+#endif
+#ifdef SHA512_DIGEST_LENGTH
+            SHA512,
+#endif
+            RIPEMD160
+    }; 
 
     CryptHash() : m_type(-1) { }
     bool Close() { return true; }
