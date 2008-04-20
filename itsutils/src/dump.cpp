@@ -439,7 +439,9 @@ void usage()
     printf("    -a     : ascdump iso hexdump\n");
     printf("    -md5   : print md5sum of selected memory range\n");
     printf("    -sha1  : print sha1 of selected memory range\n");
+#ifdef SHA256_DIGEST_LENGTH
     printf("    -sha256: print sha256 of selected memory range\n");
+#endif
     printf("    -crc   : print crc32 of selected memory range\n");
     printf("    -h     : calc all known hash types\n");
     printf("    -f     : full - do not summarize identical lines\n");
@@ -478,18 +480,24 @@ int main(int argc, char **argv)
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA1;
                       }
+#ifdef SHA256_DIGEST_LENGTH
                       else if (strcmp(argv[i]+1, "sha256")==0) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA256;
                       }
+#endif
+#ifdef SHA384_DIGEST_LENGTH
                       else if (strcmp(argv[i]+1, "sha384")==0) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA384;
                       }
+#endif
+#ifdef SHA512_DIGEST_LENGTH
                       else if (strcmp(argv[i]+1, "sha512")==0) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA512;
                       }
+#endif
                       else if (strcmp(argv[i]+1, "sum")==0)
                           g_dumpformat= DUMP_SUM;
                       else
