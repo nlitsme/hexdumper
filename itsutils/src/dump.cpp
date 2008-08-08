@@ -18,6 +18,8 @@
 //    * make '*' summary only print '*' when more than X lines are the same
 //
 // 
+#define __STDC_LIMIT_MACROS
+#define NOMINMAX
 #include <windows.h>
 #include <stdio.h>
 #include <io.h>
@@ -36,7 +38,19 @@
 #include "debug.h"
 #include "stringutils.h"
 #include "args.h"
+#include <stdint.h>
+#include <algorithm>
 
+#ifdef WIN32
+#define fseeko _fseeki64
+#endif
+
+namespace std {
+size_t min(int64_t a, size_t b)
+{
+    return (a<b) ? a : b;
+}
+}
 DumpUnitType g_dumpunit=DUMPUNIT_BYTE;
 DumpFormat g_dumpformat= DUMP_HEX_ASCII;
 int g_hashtype= 0;
@@ -44,24 +58,25 @@ unsigned long g_crc_initval= 0;
 unsigned long g_crc_poly= 0xEDB88320;
 
 int g_nMaxUnitsPerLine=-1;
-DWORD g_nStepSize= 0;
+int64_t g_llStepSize= 0;
 bool g_fulldump= false;
 DWORD g_chunksize= 1024*1024;
 
 // skipbytes is used for non-seekable files ( like stdin )
-void skipbytes(FILE *f, size_t skip)
+void skipbytes(FILE *f, int64_t skip)
 {
     ByteVector buf;
-    buf.resize(max(skip, (size_t)0x100000));
+#define MAXSKIPBUFSIZE  0x100000
+    buf.resize(std::min(skip,MAXSKIPBUFSIZE));
 
     while (skip) {
-        size_t want= min(skip, buf.size());
+        size_t want= std::min(skip,buf.size());
         fread(vectorptr(buf), 1, want, f);
         skip-=want;
     }
 }
 
-bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     ByteVector buffer;
     std::string prevline;
@@ -87,19 +102,19 @@ bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
     }
 
     if (f==stdin) {
-        skipbytes(f, dwOffset-dwBaseOffset);
+        skipbytes(f, llOffset-llBaseOffset);
     }
-    else if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    else if (fseeko(f, llOffset-llBaseOffset, SEEK_SET))
     {
-        error("fseek");
+        error("fseeko");
         fclose(f);
     }
 
-    while (dwLength>0)
+    while (llLength>0)
     {
         buffer.resize(DumpUnitSize(g_dumpunit)*g_nMaxUnitsPerLine);
 
-        DWORD dwBytesWanted= min((size_t)dwLength, buffer.size());
+        DWORD dwBytesWanted= std::min(llLength,buffer.size());
         std::string line;
         DWORD dwNumberOfBytesRead= fread(vectorptr(buffer), 1, dwBytesWanted, f);
         if (dwNumberOfBytesRead==0)
@@ -112,7 +127,7 @@ bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         else if (g_dumpformat==DUMP_ASCII)
             line= asciidump(vectorptr(buffer), dwNumberOfBytesRead)+"\n";
         else
-            line= hexdump(dwOffset, vectorptr(buffer), dwNumberOfBytesRead, DumpUnitSize(g_dumpunit), g_nMaxUnitsPerLine).substr(9);
+            line= hexdump(llOffset, vectorptr(buffer), dwNumberOfBytesRead, DumpUnitSize(g_dumpunit), g_nMaxUnitsPerLine).substr(9);
 
         if (g_dumpformat==DUMP_RAW)
             fwrite(vectorptr(buffer), 1, buffer.size(), stdout);
@@ -124,26 +139,26 @@ bool StepFile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
         else {
             bSamePrinted= false;
 
-            printf("%08lx: %s", dwOffset, line.c_str());
+            printf("%08lx: %s", llOffset, line.c_str());
         }
         prevline= line;
-        DWORD dwStep= min(dwLength, g_nStepSize);
+        int64_t llStep= std::min(llLength, g_llStepSize);
 	if (f==stdin) {
-            skipbytes(f, dwStep-dwNumberOfBytesRead);
+            skipbytes(f, llStep-dwNumberOfBytesRead);
 	}
-	else if (fseek(f, dwStep-dwNumberOfBytesRead, SEEK_CUR))
+	else if (fseeko(f, llStep-dwNumberOfBytesRead, SEEK_CUR))
         {
-            error("fseek");
+            error("fseeko");
             fclose(f);
         }
-        dwLength -= dwStep;
-        dwOffset += dwStep;
+        llLength -= llStep;
+        llOffset += llStep;
     }
     fclose(f);
     return true;
 }
 
-bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+bool Dumpfile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     DWORD flags= hexdumpflags(g_dumpunit, g_nMaxUnitsPerLine, g_dumpformat)
         | (g_fulldump?0:HEXDUMP_SUMMARIZE) | (g_dumpformat==DUMP_RAW?0:HEXDUMP_WITH_OFFSET);
@@ -168,11 +183,11 @@ bool Dumpfile(char *szFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLeng
     }
 
     if (f==stdin) {
-        skipbytes(f, dwOffset-dwBaseOffset);
+        skipbytes(f, llOffset-llBaseOffset);
     }
-    else if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    else if (fseeko(f, llOffset-llBaseOffset, SEEK_SET))
     {
-        error("fseek");
+        error("fseeko");
         fclose(f);
     }
 
@@ -213,10 +228,10 @@ typedef std::vector<CryptHash*> CryptHashList;
     CRC32 crc1(~0, g_crc_poly);
 
     ByteVector buf;
-    while (dwLength>0)
+    while (llLength>0)
     {
         buf.resize(g_chunksize);
-        DWORD dwBytesWanted= min(buf.size(), (size_t)dwLength);
+        DWORD dwBytesWanted= std::min(llLength,buf.size());
         DWORD nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
 
         if (nRead==0)
@@ -247,10 +262,10 @@ typedef std::vector<CryptHash*> CryptHashList;
         else if (g_dumpformat==DUMP_RAW)
             fwrite(vectorptr(buf), 1, buf.size(), stdout);
         else
-            bighexdump(dwOffset, buf, flags | (dwLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
+            bighexdump(llOffset, buf, flags | (llLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
 
-        dwLength -= nRead;
-        dwOffset += nRead;
+        llLength -= nRead;
+        llOffset += nRead;
     }
     fclose(f);
     if (g_dumpformat==DUMP_HASH) {
@@ -285,7 +300,7 @@ typedef std::vector<CryptHash*> CryptHashList;
     return true;
 }
 
-bool CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+bool CopyFileSteps(char *szFilename, char *szDstFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     ByteVector buffer;
 
@@ -308,11 +323,11 @@ bool CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DW
     }
 
     if (f==stdin) {
-        skipbytes(f, dwOffset-dwBaseOffset);
+        skipbytes(f, llOffset-llBaseOffset);
     }
-    else if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    else if (fseeko(f, llOffset-llBaseOffset, SEEK_SET))
     {
-        error("fseek");
+        error("fseeko");
         fclose(f);
     }
     FILE *g= fopen(szDstFilename, "w+b");
@@ -322,26 +337,26 @@ bool CopyFileSteps(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DW
     }
 
 
-    while (dwLength>0)
+    while (llLength>0)
     {
         buffer.resize(DumpUnitSize(g_dumpunit)*g_nMaxUnitsPerLine);
 
-        DWORD dwBytesWanted= min((size_t)dwLength, buffer.size());
+        DWORD dwBytesWanted= std::min(llLength,buffer.size());
         DWORD dwNumberOfBytesRead= fread(vectorptr(buffer), 1, dwBytesWanted, f);
         if (dwNumberOfBytesRead==0)
             break;
 
         fwrite(vectorptr(buffer), 1, buffer.size(), g);
 
-        DWORD dwStep= min(dwLength, g_nStepSize);
-        dwLength -= dwStep;
-        dwOffset += dwStep;
+        int64_t llStep= std::min(llLength, g_llStepSize);
+        llLength -= llStep;
+        llOffset += llStep;
     }
     fclose(g);
     fclose(f);
     return true;
 }
-bool Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD dwOffset, DWORD dwLength)
+bool Copyfile(char *szFilename, char *szDstFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     FILE *f= NULL;
     if (strcmp(szFilename, "-")==0) {
@@ -362,11 +377,11 @@ bool Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
     }
 
     if (f==stdin) {
-        skipbytes(f, dwOffset-dwBaseOffset);
+        skipbytes(f, llOffset-llBaseOffset);
     }
-    else if (fseek(f, dwOffset-dwBaseOffset, SEEK_SET))
+    else if (fseeko(f, llOffset-llBaseOffset, SEEK_SET))
     {
-        error("fseek");
+        error("fseeko");
         fclose(f);
     }
     FILE *g= fopen(szDstFilename, "w+b");
@@ -376,10 +391,10 @@ bool Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
     }
 
     ByteVector buf;
-    while (dwLength>0)
+    while (llLength>0)
     {
         buf.resize(g_chunksize);
-        DWORD dwBytesWanted= min(buf.size(), (size_t)dwLength);
+        DWORD dwBytesWanted= std::min(llLength,buf.size());
         DWORD nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
 
         if (nRead==0)
@@ -389,15 +404,15 @@ bool Copyfile(char *szFilename, char *szDstFilename, DWORD dwBaseOffset, DWORD d
 
         fwrite(vectorptr(buf), 1, buf.size(), g);
 
-        dwLength -= nRead;
-        dwOffset += nRead;
+        llLength -= nRead;
+        llOffset += nRead;
     }
 
     fclose(g);
     fclose(f);
     return true;
 }
-DWORD GetFileSize(const std::string& filename)
+int64_t GetFileSize(const std::string& filename)
 {
 #ifdef WIN32
     HANDLE hSrc = CreateFile(filename.c_str(), GENERIC_READ, FILE_SHARE_WRITE|FILE_SHARE_READ,
@@ -408,11 +423,12 @@ DWORD GetFileSize(const std::string& filename)
         return 0;
     }
 
-    DWORD dwSize= GetFileSize(hSrc, NULL);
+    DWORD dwSizeH;
+    DWORD dwSizeL= GetFileSize(hSrc, &dwSizeH);
 
     CloseHandle(hSrc);
 
-    return dwSize;
+    return ((int64_t)dwSizeH<<32)+dwSizeL;
 #else
     struct stat st;
     if (lstat(filename.c_str(), &st)) {
@@ -452,10 +468,10 @@ void usage()
 }
 int main(int argc, char **argv)
 {
-    DWORD dwOffset=0;
-    DWORD dwEndOffset=0;
-    DWORD dwLength=0;
-    DWORD dwBaseOffset=0;
+    int64_t llOffset=0;
+    int64_t llEndOffset=0;
+    int64_t llLength=0;
+    int64_t llBaseOffset=0;
     char *szFilename=NULL;
     char *szDstFilename=NULL;
     int nDumpUnitSize=1;
@@ -467,11 +483,11 @@ int main(int argc, char **argv)
     {
         if (argv[i][0]=='-' && argv[i][1]) switch (argv[i][1])
         {
-            case 'b': HANDLEULOPTION(dwBaseOffset, DWORD); break;
+            case 'b': HANDLELLOPTION(llBaseOffset, int64_t); break;
             case 'h': g_dumpformat= DUMP_HASHES; break;
-            case 'o': HANDLEULOPTION(dwOffset, DWORD); break;
-            case 'e': HANDLEULOPTION(dwEndOffset, DWORD); break;
-            case 'l': HANDLEULOPTION(dwLength, DWORD); break;
+            case 'o': HANDLELLOPTION(llOffset, int64_t); break;
+            case 'e': HANDLELLOPTION(llEndOffset, int64_t); break;
+            case 'l': HANDLELLOPTION(llLength, int64_t); break;
 
             case 'r': HANDLEULOPTION(g_chunksize, DWORD); break;
 
@@ -501,7 +517,7 @@ int main(int argc, char **argv)
                       else if (strcmp(argv[i]+1, "sum")==0)
                           g_dumpformat= DUMP_SUM;
                       else
-                          HANDLEULOPTION(g_nStepSize, DWORD);
+                          HANDLELLOPTION(g_llStepSize, int64_t);
                       break;
             case 'm': if (strcmp(argv[i]+1, "md5")==0) {
                           g_dumpformat= DUMP_HASH; 
@@ -580,28 +596,28 @@ int main(int argc, char **argv)
 #endif
     }
 
-    if (dwLength==0 && strcmp(szFilename, "-")==0)
-        dwLength= MAXDWORD;
-    if (dwLength==0 && dwEndOffset)
-        dwLength= dwEndOffset-dwOffset;
+    if (llLength==0 && strcmp(szFilename, "-")==0)
+        llLength= INT64_MAX;
+    if (llLength==0 && llEndOffset)
+        llLength= llEndOffset-llOffset;
 
-    if (dwLength==0)
-        dwLength= GetFileSize(szFilename);
+    if (llLength==0)
+        llLength= GetFileSize(szFilename);
 
-    if (dwOffset < dwBaseOffset && dwOffset+0x80000000 > dwBaseOffset)
-        dwOffset= dwBaseOffset;
+    if (llOffset < llBaseOffset && llOffset+0x80000000 > llBaseOffset)
+        llOffset= llBaseOffset;
 
     if (szDstFilename) {
-        if (g_nStepSize)
-            CopyFileSteps(szFilename, szDstFilename, dwBaseOffset, dwOffset, dwLength);
+        if (g_llStepSize)
+            CopyFileSteps(szFilename, szDstFilename, llBaseOffset, llOffset, llLength);
         else
-            Copyfile(szFilename, szDstFilename, dwBaseOffset, dwOffset, dwLength);
+            Copyfile(szFilename, szDstFilename, llBaseOffset, llOffset, llLength);
     }
     else {
-        if (g_nStepSize)
-            StepFile(szFilename, dwBaseOffset, dwOffset, dwLength);
+        if (g_llStepSize)
+            StepFile(szFilename, llBaseOffset, llOffset, llLength);
         else
-            Dumpfile(szFilename, dwBaseOffset, dwOffset, dwLength);
+            Dumpfile(szFilename, llBaseOffset, llOffset, llLength);
     }
 
     return 0;
