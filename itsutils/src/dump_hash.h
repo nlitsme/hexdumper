@@ -43,7 +43,7 @@ private:
         HCRYPTHASH m_hHash;
         int m_type;
 public:
-    enum { MD2, MD4, MD5, SHA1, SHA256, SHA384, SHA512 }; 
+    enum { MD2, MD4, MD5, SHA1, SHA256, SHA384, SHA512, HASHTYPECOUNT }; 
 
     CryptHash(CryptProvider &provider) : m_prov(provider), m_hHash(0), m_type(0) { }
 

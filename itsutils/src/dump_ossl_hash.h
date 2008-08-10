@@ -99,7 +99,10 @@ public:
 #ifdef SHA512_DIGEST_LENGTH
             SHA512,
 #endif
-            RIPEMD160
+#ifdef RIPEMD160_DIGEST_LENGTH
+            RIPEMD160,
+#endif
+            HASHTYPECOUNT 
     }; 
 
     CryptHash() : m_type(-1) { }
