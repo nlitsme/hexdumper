@@ -66,8 +66,7 @@ DWORD g_chunksize= 1024*1024;
 void skipbytes(FILE *f, int64_t skip)
 {
     ByteVector buf;
-#define MAXSKIPBUFSIZE  0x100000
-    buf.resize(std::min(skip,MAXSKIPBUFSIZE));
+    buf.resize(std::min(skip,g_chunksize));
 
     while (skip) {
         size_t want= std::min(skip,buf.size());
@@ -208,7 +207,7 @@ typedef std::vector<CryptHash*> CryptHashList;
     if (g_dumpformat==DUMP_HASHES) {
 
 #define VALIDALGS 0x701e
-        for (int ihash=0 ; ihash<15  ; ihash++) {
+        for (int ihash=0 ; ihash<CryptHash::HASHTYPECOUNT ; ihash++) {
 #ifdef _USE_WINCRYPTAPI
             if (((1<<ihash)&VALIDALGS)==0)
                 continue;
@@ -573,6 +572,9 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // 64 = highest 2^n, such that addrsize + 2^n <= screenwidth
+    // 32 = highest 2^n, such that addrsize + 3*2^n <= screenwidth+25 ...
+    // 16 = highest 2^n, such that addrsize + 4*2^n <= screenwidth
     if (g_nMaxUnitsPerLine<0) {
         if (g_dumpformat==DUMP_ASCII) 
             g_nMaxUnitsPerLine= 64/nDumpUnitSize;
@@ -604,6 +606,7 @@ int main(int argc, char **argv)
     if (llLength==0)
         llLength= GetFileSize(szFilename);
 
+    // todo: i think i meant something different here - need to fix.
     if (llOffset < llBaseOffset && llOffset+0x80000000 > llBaseOffset)
         llOffset= llBaseOffset;
 
