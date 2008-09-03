@@ -125,8 +125,10 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
             line= ascdump(buffer);
         else if (g_dumpformat==DUMP_ASCII)
             line= asciidump(vectorptr(buffer), dwNumberOfBytesRead)+"\n";
-        else
-            line= hexdump(llOffset, vectorptr(buffer), dwNumberOfBytesRead, DumpUnitSize(g_dumpunit), g_nMaxUnitsPerLine).substr(9);
+        else {
+            line= hexdump(llOffset, vectorptr(buffer), dwNumberOfBytesRead, DumpUnitSize(g_dumpunit), g_nMaxUnitsPerLine);
+            line.erase(0, line.find_first_of(' ')+1);
+        }
 
         if (g_dumpformat==DUMP_RAW)
             fwrite(vectorptr(buffer), 1, buffer.size(), stdout);
@@ -138,7 +140,11 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
         else {
             bSamePrinted= false;
 
-            printf("%08lx: %s", llOffset, line.c_str());
+            if ((llOffset)>>32)
+                printf("%x%08lx: %s\n", static_cast<DWORD>((llOffset)>>32), static_cast<DWORD>(llOffset), line.c_str());
+            else
+                printf("%08lx: %s\n", static_cast<DWORD>(llOffset), line.c_str());
+
         }
         prevline= line;
         int64_t llStep= std::min(llLength, g_llStepSize);
