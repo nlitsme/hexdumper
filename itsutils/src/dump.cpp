@@ -13,9 +13,13 @@
 //   does not work as it should, .. offsets seem to be double from their real value.
 //
 // todo:
-//    * think of way to make winxp support sha256
+//    * DONE think of way to make winxp support sha256: now using openssl
 //    * DONE add simple add-checksum , and xor-checksum support
 //    * make '*' summary only print '*' when more than X lines are the same
+//
+//note: you can use dump also to read block devices, 
+//  dump \\.\PhysicalDrive0 -xx -o 0  -l 0xa00000000 -s 0x100000000
+// will dump 64 ascii chars every 4G of your 40G disk.
 //
 // 
 #define __STDC_LIMIT_MACROS
@@ -59,7 +63,10 @@ unsigned long g_crc_poly= 0xEDB88320;
 
 int g_nMaxUnitsPerLine=-1;
 int64_t g_llStepSize= 0;
+
 bool g_fulldump= false;
+unsigned g_summarizeThreshold=-1;
+
 DWORD g_chunksize= 1024*1024;
 
 // skipbytes is used for non-seekable files ( like stdin )
@@ -79,7 +86,7 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
 {
     ByteVector buffer;
     std::string prevline;
-    bool bSamePrinted= false;
+    int nSameCount= 0;
 
     FILE *f= NULL;
     if (strcmp(szFilename, "-")==0) {
@@ -124,27 +131,28 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
         else if (g_dumpformat==DUMP_STRINGS)
             line= ascdump(buffer);
         else if (g_dumpformat==DUMP_ASCII)
-            line= asciidump(vectorptr(buffer), dwNumberOfBytesRead)+"\n";
+            line= asciidump(vectorptr(buffer), dwNumberOfBytesRead);
         else {
             line= hexdump(llOffset, vectorptr(buffer), dwNumberOfBytesRead, DumpUnitSize(g_dumpunit), g_nMaxUnitsPerLine);
             line.erase(0, line.find_first_of(' ')+1);
         }
+        if (*line.rbegin()=='\n')
+            line.resize(line.size()-1);
 
         if (g_dumpformat==DUMP_RAW)
             fwrite(vectorptr(buffer), 1, buffer.size(), stdout);
         else if (!g_fulldump && line == prevline) {
-            if (!bSamePrinted && line != " * * * * * *\n")
-                printf("*\n");
-            bSamePrinted= true;
+            nSameCount++;
         }
         else {
-            bSamePrinted= false;
-
-            if ((llOffset)>>32)
-                printf("%x%08lx: %s\n", static_cast<DWORD>((llOffset)>>32), static_cast<DWORD>(llOffset), line.c_str());
-            else
-                printf("%08lx: %s\n", static_cast<DWORD>(llOffset), line.c_str());
-
+            if (nSameCount>0 && nSameCount<=g_summarizeThreshold) {
+                for (unsigned i=0 ; i<nSameCount ; i++)
+                    writedumpline(llOffset+(i-nSameCount)*g_llStepSize, prevline);
+            }
+            else if (nSameCount>g_summarizeThreshold)
+                debug("*  [ 0x%x lines ]\n", nSameCount);
+            nSameCount= 0;
+            writedumpline(llOffset, line);
         }
         prevline= line;
         int64_t llStep= std::min(llLength, g_llStepSize);
@@ -160,6 +168,12 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
         llOffset += llStep;
     }
     fclose(f);
+    if (nSameCount==1)
+        writedumpline(llOffset-g_llStepSize, prevline);
+    else if (nSameCount>1)
+        debug("*  [ 0x%x lines ]\n", nSameCount);
+    writedumpline(llOffset, "");
+
     return true;
 }
 
@@ -466,6 +480,7 @@ void usage()
     printf("    -crc   : print crc32 of selected memory range\n");
     printf("    -h     : calc all known hash types\n");
     printf("    -f     : full - do not summarize identical lines\n");
+    printf("    -S N   : summarize threshold\n");
     printf("    -c     : print raw memory to stdout\n");
     printf("    -x     : print only hex\n");
     printf("    -xx    : print only fixed length ascii dumps\n");
@@ -555,6 +570,7 @@ int main(int argc, char **argv)
                           g_dumpformat= DUMP_RAW; 
                       break;
             case 'f': g_fulldump= true; break;
+            case 'S': HANDLEULOPTION(g_summarizeThreshold, unsigned); break;
             case 'x': if (argv[i][2]=='x')
                           g_dumpformat= DUMP_ASCII; 
                       else
