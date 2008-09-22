@@ -9,9 +9,13 @@
  */
 
 // todo: fix bug:
-//   dump 8000.mem -o 0x02400000 -s 0x400 -xx
-//   does not work as it should, .. offsets seem to be double from their real value.
+// ? dump 8000.mem -o 0x02400000 -s 0x400 -xx
+// ? does not work as it should, .. offsets seem to be double from their real value.
+//   ... bug seems to have disappeared
 //
+// todo: fix bug:
+//   dump of a very large file ( >2M ) with all 0s
+//   the summary lines are not printed.
 // todo:
 //    * DONE think of way to make winxp support sha256: now using openssl
 //    * DONE add simple add-checksum , and xor-checksum support
