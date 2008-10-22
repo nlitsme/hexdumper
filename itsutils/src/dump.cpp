@@ -19,8 +19,11 @@
 // todo:
 //    * DONE think of way to make winxp support sha256: now using openssl
 //    * DONE add simple add-checksum , and xor-checksum support
-//    * make '*' summary only print '*' when more than X lines are the same
+//    * DONE make '*' summary only print '*' when more than X lines are the same
 //
+// done:
+//    * dump -s STEP {-md5|-sum}
+//       should print hash/sum of each step block. ( and default to blocksize=stepsize )
 //note: you can use dump also to read block devices, 
 //  dump \\.\PhysicalDrive0 -xx -o 0  -l 0xa00000000 -s 0x100000000
 // will dump 64 ascii chars every 4G of your 40G disk.
@@ -120,6 +123,10 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
         fclose(f);
     }
 
+
+#ifdef _USE_WINCRYPTAPI
+    CryptProvider cprov;
+#endif
     while (llLength>0)
     {
         buffer.resize(DumpUnitSize(g_dumpunit)*g_nMaxUnitsPerLine);
@@ -132,13 +139,90 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
         if (g_dumpformat==DUMP_RAW) {
             line.clear();
         }
+        else if (g_dumpformat==DUMP_HASH) {
+#ifdef _USE_WINCRYPTAPI
+            CryptHash hashcalc(cprov);
+#define HASHTYPEOFFSET (ALG_CLASS_HASH | ALG_TYPE_ANY)
+#else
+            CryptHash hashcalc;
+#define HASHTYPEOFFSET 0
+#endif
+            if (!hashcalc.InitHash(g_hashtype)) {
+                error("CryptHash.init");
+                return false;
+            }
+            if (!hashcalc.AddData(buffer)) {
+                error("CryptHash.add");
+                break;
+            }
+            ByteVector hash;
+            if (!hashcalc.GetHash(hash)) {
+                error("CryptHash.final");
+                return false;
+            }
+            line= hash_as_string(hash);
+        }
+        else if (g_dumpformat==DUMP_HASHES) {
+typedef std::vector<CryptHash*> CryptHashList;
+            CryptHashList hashes;
+
+#define VALIDALGS 0x701e
+            for (int ihash=0 ; ihash<CryptHash::HASHTYPECOUNT ; ihash++) {
+#ifdef _USE_WINCRYPTAPI
+                if (((1<<ihash)&VALIDALGS)==0)
+                    continue;
+                hashes.push_back(new CryptHash(cprov));
+#else
+                hashes.push_back(new CryptHash);
+#endif
+                if (!hashes.back()->InitHash(ihash+HASHTYPEOFFSET)) {
+                    delete hashes.back();
+                    hashes.resize(hashes.size()-1);
+                }
+            }
+            for (CryptHashList::iterator ih= hashes.begin() ; ih!=hashes.end() ; ih++)
+            {
+                (*ih)->AddData(buffer);
+            }
+            line.clear();
+            for (CryptHashList::iterator ih= hashes.begin() ; ih!=hashes.end() ; ih++)
+            {
+                ByteVector hash;
+                if (!(*ih)->GetHash(hash)) {
+                    error("Gethash(%08lx - %s)", (*ih)->hashtype(), (*ih)->hashname().c_str());
+                }
+                else {
+                    if (!line.empty())
+                        line += " ";
+                    line += hash_as_string(hash);
+                }
+            }
+        }
+        else if (g_dumpformat==DUMP_CRC32) {
+            CRC32 crc(g_crc_initval, g_crc_poly);
+            crc.add_data(vectorptr(buffer), buffer.size());
+            line= stringformat("%08lx~%08lx", crc.crc, ~crc.crc);
+        }
+        else if (g_dumpformat==DUMP_SUM) {
+            DATASUM sum;
+            CRC32 crc(g_crc_initval, g_crc_poly);
+            CRC32 crc1(~0, g_crc_poly);
+            sum.add_data(vectorptr(buffer), buffer.size());
+            crc.add_data(vectorptr(buffer), buffer.size());
+            crc1.add_data(vectorptr(buffer), buffer.size());
+
+            line= stringformat("%08lx~%08lx  %08lx~%08lx +%02x LE:%04x %08lx  BE:%04x %08lx  ^%02x %04x %08lx", 
+                crc.crc, ~crc.crc, crc1.crc, ~crc1.crc, 
+                sum.sum1, sum.sum2_le, sum.sum4_le, sum.sum2_be, sum.sum4_be,
+                sum.sumxor1, sum.sumxor2, sum.sumxor4);
+        }
         else if (g_dumpformat==DUMP_STRINGS)
             line= ascdump(buffer);
         else if (g_dumpformat==DUMP_ASCII)
             line= asciidump(vectorptr(buffer), dwNumberOfBytesRead);
         else {
             line= hexdump(llOffset, vectorptr(buffer), dwNumberOfBytesRead, DumpUnitSize(g_dumpunit), g_nMaxUnitsPerLine);
-            line.erase(0, line.find_first_of(' ')+1);
+	            line.erase(0, line.find_first_of(' ')+1);
         }
         if (*line.rbegin()=='\n')
             line.resize(line.size()-1);
@@ -151,7 +235,7 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
         else {
             if (nSameCount>0 && nSameCount<=g_summarizeThreshold) {
                 for (unsigned i=0 ; i<nSameCount ; i++)
-                    writedumpline(llOffset+(i-nSameCount)*g_llStepSize, prevline);
+                    writedumpline(llOffset+g_llStepSize*(signed(i)-nSameCount), prevline);
             }
             else if (nSameCount>g_summarizeThreshold)
                 debug("*  [ 0x%x lines ]\n", nSameCount);
@@ -160,10 +244,10 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
         }
         prevline= line;
         int64_t llStep= std::min(llLength, g_llStepSize);
-	if (f==stdin) {
+        if (f==stdin) {
             skipbytes(f, llStep-dwNumberOfBytesRead);
-	}
-	else if (fseeko(f, llStep-dwNumberOfBytesRead, SEEK_CUR))
+        }
+        else if (fseeko(f, llStep-dwNumberOfBytesRead, SEEK_CUR))
         {
             error("fseeko");
             fclose(f);
@@ -172,6 +256,7 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
         llOffset += llStep;
     }
     fclose(f);
+
     if (nSameCount==1)
         writedumpline(llOffset-g_llStepSize, prevline);
     else if (nSameCount>1)
