@@ -19,6 +19,7 @@
 // 10bit-CRC:  0x233       =  x^10 + x^9  + x^5  + x^4  + x  + 1
 // 8bit-CRC:   0x07        =  x^8  + x^2  + x + 1
 
+// 30bit-CRC: poly=0x6030B9C7 rev= 0xe39d0c06  ( used in qualcomm roms )
 class CRC32 {
 public:
     unsigned long crc;
