@@ -7,23 +7,28 @@
  * this program provides various ways of (hex) dumping sections of binary files
  *
  */
-
-// todo: fix bug:
+// DONE:
 // ? dump 8000.mem -o 0x02400000 -s 0x400 -xx
 // ? does not work as it should, .. offsets seem to be double from their real value.
 //   ... bug seems to have disappeared
 //
-// todo: fix bug:
+// DONE:
 //   dump of a very large file ( >2M ) with all 0s
 //   the summary lines are not printed.
+
 // todo:
 //    * DONE think of way to make winxp support sha256: now using openssl
 //    * DONE add simple add-checksum , and xor-checksum support
 //    * DONE make '*' summary only print '*' when more than X lines are the same
+//    * bug: "dump -s 16 -w 8 -4 -x x.nb"  should not print ascii part in line.
+//        problem is incompatible interface to bighexdump and hexdump
+//        other problem is that the hexdumper has no state.
 //
 // done:
 //    * dump -s STEP {-md5|-sum}
 //       should print hash/sum of each step block. ( and default to blocksize=stepsize )
+//
+//
 //note: you can use dump also to read block devices, 
 //  dump \\.\PhysicalDrive0 -xx -o 0  -l 0xa00000000 -s 0x100000000
 // will dump 64 ascii chars every 4G of your 40G disk.
@@ -691,6 +696,8 @@ int main(int argc, char **argv)
             g_nMaxUnitsPerLine= 64/nDumpUnitSize;
         else if (g_dumpformat==DUMP_HEX) 
             g_nMaxUnitsPerLine= 32/nDumpUnitSize;
+        else if (g_dumpformat>=DUMP_HASH)
+            g_nMaxUnitsPerLine= g_llStepSize;
         else
             g_nMaxUnitsPerLine= 16/nDumpUnitSize;
     }
