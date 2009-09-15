@@ -64,6 +64,19 @@ struct hashdefinition hashdefs[]= {
 #ifdef RIPEMD160_DIGEST_LENGTH
 {"RIPEMD160",   sizeof(RIPEMD160_CTX), RIPEMD160_DIGEST_LENGTH, (PFN_Init)RIPEMD160_Init, (PFN_Update)RIPEMD160_Update, (PFN_Final)RIPEMD160_Final, RIPEMD160 },
 #endif
+
+    // todo: add whirlpool
+    // ripemd128, ripemd256, ripemd320  http://homes.esat.kuleuven.be/~bosselae/ripemd160.html
+    // haval
+    // ripemd
+    // tiger-1
+    // panama
+    // gost
+    // ghash-32-3
+    // ghash-32-5
+    // radiogatun
+    // unix passwd crypt ( des, md5, ...)
+    // various hmac's, with user supplied key
 };
 #define NRHASHTYPES (sizeof(hashdefs)/sizeof(*hashdefs))
 class CryptHash {
