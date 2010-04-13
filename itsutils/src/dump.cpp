@@ -35,7 +35,9 @@
 //
 // 
 #define __STDC_LIMIT_MACROS
+#ifndef NOMINMAX
 #define NOMINMAX
+#endif
 #include <windows.h>
 #include <stdio.h>
 #include <io.h>
