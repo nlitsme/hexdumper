@@ -464,6 +464,15 @@ bool CopyFileSteps(char *szFilename, char *szDstFilename, int64_t llBaseOffset, 
         fwrite(vectorptr(buffer), 1, buffer.size(), g);
 
         int64_t llStep= std::min(llLength, g_llStepSize);
+        if (f==stdin) {
+            skipbytes(f, llStep-dwNumberOfBytesRead);
+        }
+        else if (fseeko(f, llStep-dwNumberOfBytesRead, SEEK_CUR))
+        {
+            error("fseeko");
+            fclose(f);
+        }
+
         llLength -= llStep;
         llOffset += llStep;
     }
@@ -607,7 +616,7 @@ int main(int argc, char **argv)
 
             case 'r': HANDLEULOPTION(g_chunksize, DWORD); break;
 
-            case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, DWORD); break;
+            case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, int); break;
             case 's': if (strcmp(argv[i]+1, "sha1")==0) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA1;
