@@ -22,16 +22,16 @@
 // 30bit-CRC: poly=0x6030B9C7 rev= 0xe39d0c06  ( used in qualcomm roms )
 class CRC32 {
 public:
-    unsigned long crc;
-    unsigned long crc32tab[256];
-    CRC32(unsigned long crc=0, unsigned long poly= 0xEDB88320) : crc(crc) 
+    uint32_t crc;
+    uint32_t crc32tab[256];
+    CRC32(uint32_t crc=0, uint32_t poly= 0xEDB88320) : crc(crc) 
     {
-        for (unsigned long i=0 ; i<256 ; i++)
+        for (uint32_t i=0 ; i<256 ; i++)
             crc32tab[i]= calccrc32tab(i, poly);
     }
-    static unsigned long calccrc32tab(unsigned long c, unsigned long poly)
+    static uint32_t calccrc32tab(uint32_t c, uint32_t poly)
     {
-        unsigned long value= c;
+        uint32_t value= c;
         for (int i=0 ; i<8 ; i++)
         {
             value = ((value>>1)&0x7fffffff) ^ ( (value&1) ? poly : 0 );
