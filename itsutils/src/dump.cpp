@@ -96,14 +96,16 @@ void skipbytes(FILE *f, int64_t skip)
     }
 }
 
-bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
+bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     ByteVector buffer;
     std::string prevline;
     int nSameCount= 0;
 
+    bool fromStdin= srcFilename=="-";
+
     FILE *f= NULL;
-    if (strcmp(szFilename, "-")==0) {
+    if (fromStdin) {
         f= stdin;
 #ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
@@ -113,11 +115,11 @@ bool StepFile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
 #endif
     }
     else {
-        f= fopen(szFilename, "rb");
+        f= fopen(srcFilename.c_str(), "rb");
     }
 
     if (f==NULL) {
-        perror(szFilename);
+        perror(srcFilename.c_str());
         return false;
     }
 
@@ -273,14 +275,15 @@ typedef std::vector<CryptHash*> CryptHashList;
     return true;
 }
 
-bool Dumpfile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
+bool Dumpfile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     DWORD flags= hexdumpflags(g_dumpunit, g_nMaxUnitsPerLine, g_dumpformat)
         | (g_fulldump?0:HEXDUMP_SUMMARIZE) | (g_dumpformat==DUMP_RAW?0:HEXDUMP_WITH_OFFSET);
 
+    bool fromStdin= srcFilename=="-";
 
     FILE *f= NULL;
-    if (strcmp(szFilename, "-")==0) {
+    if (fromStdin) {
         f= stdin;
 #ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
@@ -290,10 +293,10 @@ bool Dumpfile(char *szFilename, int64_t llBaseOffset, int64_t llOffset, int64_t 
 #endif
     }
     else {
-        f= fopen(szFilename, "rb");
+        f= fopen(srcFilename.c_str(), "rb");
     }
     if (f==NULL) {
-        perror(szFilename);
+        perror(srcFilename.c_str());
         return false;
     }
 
@@ -415,12 +418,14 @@ typedef std::vector<CryptHash*> CryptHashList;
     return true;
 }
 
-bool CopyFileSteps(char *szFilename, char *szDstFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
+bool CopyFileSteps(const std::string& srcFilename, const std::string& dstFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     ByteVector buffer;
 
+    bool fromStdin= srcFilename=="-";
+
     FILE *f= NULL;
-    if (strcmp(szFilename, "-")==0) {
+    if (fromStdin) {
         f= stdin;
 #ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
@@ -430,10 +435,10 @@ bool CopyFileSteps(char *szFilename, char *szDstFilename, int64_t llBaseOffset, 
 #endif
     }
     else {
-        f= fopen(szFilename, "rb");
+        f= fopen(srcFilename.c_str(), "rb");
     }
     if (f==NULL) {
-        perror(szFilename);
+        perror(srcFilename.c_str());
         return false;
     }
 
@@ -445,9 +450,9 @@ bool CopyFileSteps(char *szFilename, char *szDstFilename, int64_t llBaseOffset, 
         error("fseeko");
         fclose(f);
     }
-    FILE *g= fopen(szDstFilename, "w+b");
+    FILE *g= fopen(dstFilename.c_str(), "w+b");
     if (g==NULL) {
-        perror(szDstFilename);
+        perror(dstFilename.c_str());
         return false;
     }
 
@@ -480,10 +485,13 @@ bool CopyFileSteps(char *szFilename, char *szDstFilename, int64_t llBaseOffset, 
     fclose(f);
     return true;
 }
-bool Copyfile(char *szFilename, char *szDstFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
+bool Copyfile(const std::string& srcFilename, const std::string& dstFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     FILE *f= NULL;
-    if (strcmp(szFilename, "-")==0) {
+
+    bool fromStdin= srcFilename=="-";
+
+    if (fromStdin) {
         f= stdin;
 #ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
@@ -493,10 +501,10 @@ bool Copyfile(char *szFilename, char *szDstFilename, int64_t llBaseOffset, int64
 #endif
     }
     else {
-        f= fopen(szFilename, "rb");
+        f= fopen(srcFilename.c_str(), "rb");
     }
     if (f==NULL) {
-        perror(szFilename);
+        perror(srcFilename.c_str());
         return false;
     }
 
@@ -508,9 +516,9 @@ bool Copyfile(char *szFilename, char *szDstFilename, int64_t llBaseOffset, int64
         error("fseeko");
         fclose(f);
     }
-    FILE *g= fopen(szDstFilename, "w+b");
+    FILE *g= fopen(dstFilename.c_str(), "w+b");
     if (g==NULL) {
-        perror(szDstFilename);
+        perror(dstFilename.c_str());
         return false;
     }
 
@@ -556,8 +564,8 @@ int64_t GetFileSize(const std::string& filename)
 #else
     struct stat st;
     if (lstat(filename.c_str(), &st)) {
-	    error("lstat");
-	    return 0;
+        error("lstat");
+        return 0;
     }
     return st.st_size;
 #endif
@@ -597,8 +605,8 @@ int main(int argc, char **argv)
     int64_t llEndOffset=0;
     int64_t llLength=0;
     int64_t llBaseOffset=0;
-    char *szFilename=NULL;
-    char *szDstFilename=NULL;
+    std::string srcFilename;
+    std::string dstFilename;
     int nDumpUnitSize=1;
 
     DebugStdOut();
@@ -689,8 +697,8 @@ int main(int argc, char **argv)
                 return 1;
         }
         else switch (argsfound++) {
-            case 0: szFilename= argv[i]; break;
-            case 1: szDstFilename= argv[i]; break;
+            case 0: srcFilename= argv[i]; break;
+            case 1: dstFilename= argv[i]; break;
         }
     }
     if (argsfound==0 || argsfound>2)
@@ -722,34 +730,45 @@ int main(int argc, char **argv)
 #ifdef WIN32
         if (-1==_setmode( _fileno( stdout ), _O_BINARY )) {
             error("_setmode(stdout, rb)");
-            return false;
+            return 1;
         }
 #endif
     }
 
-    if (llLength==0 && strcmp(szFilename, "-")==0)
+    bool fromStdin= srcFilename=="-";
+
+    uint64_t llFileSize= fromStdin ? 0 : GetFileSize(srcFilename);
+    if (llOffset<0) {
+        if (fromStdin) {
+            printf("dumping end of stdin stream not yet implemented\n");
+            return 1;
+        }
+        llOffset += llFileSize;
+    }
+
+    if (llLength==0 && fromStdin)
         llLength= INT64_MAX;
     if (llLength==0 && llEndOffset)
         llLength= llEndOffset-llOffset;
 
     if (llLength==0)
-        llLength= GetFileSize(szFilename);
+        llLength= llFileSize;
 
     // todo: i think i meant something different here - need to fix.
     if (llOffset < llBaseOffset && llOffset+0x80000000 > llBaseOffset)
         llOffset= llBaseOffset;
 
-    if (szDstFilename) {
+    if (!dstFilename.empty()) {
         if (g_llStepSize)
-            CopyFileSteps(szFilename, szDstFilename, llBaseOffset, llOffset, llLength);
+            CopyFileSteps(srcFilename, dstFilename, llBaseOffset, llOffset, llLength);
         else
-            Copyfile(szFilename, szDstFilename, llBaseOffset, llOffset, llLength);
+            Copyfile(srcFilename, dstFilename, llBaseOffset, llOffset, llLength);
     }
     else {
         if (g_llStepSize)
-            StepFile(szFilename, llBaseOffset, llOffset, llLength);
+            StepFile(srcFilename, llBaseOffset, llOffset, llLength);
         else
-            Dumpfile(szFilename, llBaseOffset, llOffset, llLength);
+            Dumpfile(srcFilename, llBaseOffset, llOffset, llLength);
     }
 
     return 0;
