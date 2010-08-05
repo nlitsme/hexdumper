@@ -38,10 +38,12 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <windows.h>
+#include <util/wintypes.h>
 #include <stdio.h>
+#ifdef _WIN32
 #include <io.h>
-#ifndef WIN32
+#endif
+#ifndef _WIN32
 #include <sys/stat.h>
 #endif
 #include <fcntl.h>
@@ -57,6 +59,7 @@
 #include "stringutils.h"
 #include "args.h"
 #include <stdint.h>
+#include <string.h>
 #include <algorithm>
 
 #ifdef WIN32
@@ -81,7 +84,7 @@ int64_t g_llStepSize= 0;
 bool g_fulldump= false;
 unsigned g_summarizeThreshold=-1;
 
-DWORD g_chunksize= 1024*1024;
+uint32_t g_chunksize= 1024*1024;
 
 // skipbytes is used for non-seekable files ( like stdin )
 void skipbytes(FILE *f, int64_t skip)
@@ -140,9 +143,9 @@ bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
     {
         buffer.resize(DumpUnitSize(g_dumpunit)*g_nMaxUnitsPerLine);
 
-        DWORD dwBytesWanted= std::min(llLength,buffer.size());
+        uint32_t dwBytesWanted= std::min(llLength,buffer.size());
         std::string line;
-        DWORD dwNumberOfBytesRead= fread(vectorptr(buffer), 1, dwBytesWanted, f);
+        uint32_t dwNumberOfBytesRead= fread(vectorptr(buffer), 1, dwBytesWanted, f);
         if (dwNumberOfBytesRead==0)
             break;
         if (g_dumpformat==DUMP_RAW) {
@@ -277,7 +280,7 @@ typedef std::vector<CryptHash*> CryptHashList;
 
 bool Dumpfile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
-    DWORD flags= hexdumpflags(g_dumpunit, g_nMaxUnitsPerLine, g_dumpformat)
+    uint32_t flags= hexdumpflags(g_dumpunit, g_nMaxUnitsPerLine, g_dumpformat)
         | (g_fulldump?0:HEXDUMP_SUMMARIZE) | (g_dumpformat==DUMP_RAW?0:HEXDUMP_WITH_OFFSET);
 
     bool fromStdin= srcFilename=="-";
@@ -349,8 +352,8 @@ typedef std::vector<CryptHash*> CryptHashList;
     while (llLength>0)
     {
         buf.resize(g_chunksize);
-        DWORD dwBytesWanted= std::min(llLength,buf.size());
-        DWORD nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
+        uint32_t dwBytesWanted= std::min(llLength,buf.size());
+        uint32_t nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
 
         if (nRead==0)
             break;
@@ -461,8 +464,8 @@ bool CopyFileSteps(const std::string& srcFilename, const std::string& dstFilenam
     {
         buffer.resize(DumpUnitSize(g_dumpunit)*g_nMaxUnitsPerLine);
 
-        DWORD dwBytesWanted= std::min(llLength,buffer.size());
-        DWORD dwNumberOfBytesRead= fread(vectorptr(buffer), 1, dwBytesWanted, f);
+        uint32_t dwBytesWanted= std::min(llLength,buffer.size());
+        uint32_t dwNumberOfBytesRead= fread(vectorptr(buffer), 1, dwBytesWanted, f);
         if (dwNumberOfBytesRead==0)
             break;
 
@@ -526,8 +529,8 @@ bool Copyfile(const std::string& srcFilename, const std::string& dstFilename, in
     while (llLength>0)
     {
         buf.resize(g_chunksize);
-        DWORD dwBytesWanted= std::min(llLength,buf.size());
-        DWORD nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
+        uint32_t dwBytesWanted= std::min(llLength,buf.size());
+        uint32_t nRead= fread(vectorptr(buf), 1, dwBytesWanted, f);
 
         if (nRead==0)
             break;
@@ -622,51 +625,51 @@ int main(int argc, char **argv)
             case 'e': HANDLELLOPTION(llEndOffset, int64_t); break;
             case 'l': HANDLELLOPTION(llLength, int64_t); break;
 
-            case 'r': HANDLEULOPTION(g_chunksize, DWORD); break;
+            case 'r': HANDLEULOPTION(g_chunksize, uint32_t); break;
 
             case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, int); break;
-            case 's': if (strcmp(argv[i]+1, "sha1")==0) {
+            case 's': if (stringcompare(argv[i]+1, "sha1")==0) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA1;
                       }
 #ifdef SHA256_DIGEST_LENGTH
-                      else if (strcmp(argv[i]+1, "sha256")==0) {
+                      else if (stringcompare(argv[i]+1, "sha256")==0) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA256;
                       }
 #endif
 #ifdef SHA384_DIGEST_LENGTH
-                      else if (strcmp(argv[i]+1, "sha384")==0) {
+                      else if (stringcompare(argv[i]+1, "sha384")==0) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA384;
                       }
 #endif
 #ifdef SHA512_DIGEST_LENGTH
-                      else if (strcmp(argv[i]+1, "sha512")==0) {
+                      else if (stringcompare(argv[i]+1, "sha512")==0) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA512;
                       }
 #endif
-                      else if (strcmp(argv[i]+1, "sum")==0)
+                      else if (stringcompare(argv[i]+1, "sum")==0)
                           g_dumpformat= DUMP_SUM;
                       else
                           HANDLELLOPTION(g_llStepSize, int64_t);
                       break;
-            case 'm': if (strcmp(argv[i]+1, "md5")==0) {
+            case 'm': if (stringcompare(argv[i]+1, "md5")==0) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD5;
                       }
-                      else if (strcmp(argv[i]+1, "md2")==0) {
+                      else if (stringcompare(argv[i]+1, "md2")==0) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD2;
                       }
-                      else if (strcmp(argv[i]+1, "md4")==0) {
+                      else if (stringcompare(argv[i]+1, "md4")==0) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD4;
                       }
                       break;
             case 'a': g_dumpformat= DUMP_STRINGS; break;
-            case 'c': if (strncmp(argv[i]+1, "crc", 3)==0) {
+            case 'c': if (std::string(argv[i]+1, 3)=="crc") {
                           g_dumpformat= DUMP_CRC32; 
                           if (argv[i][4]) {
                               char *colon= strchr(argv[i], ':');
