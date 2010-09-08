@@ -23,6 +23,9 @@
 //    * bug: "dump -s 16 -w 8 -4 -x x.nb"  should not print ascii part in line.
 //        problem is incompatible interface to bighexdump and hexdump
 //        other problem is that the hexdumper has no state.
+//    * improved hexdumper
+//    * check for identical lines -before- converting to string
+//    * use MmapReader/FileReader/BlockDevice where appropriate
 //
 // done:
 //    * dump -s STEP {-md5|-sum}
@@ -45,6 +48,8 @@
 #endif
 #ifndef _WIN32
 #include <sys/stat.h>
+#include <sys/disk.h>
+#include <sys/ioctl.h>
 #endif
 #include <fcntl.h>
 #ifdef _USE_WINCRYPTAPI
@@ -570,7 +575,37 @@ int64_t GetFileSize(const std::string& filename)
         error("lstat");
         return 0;
     }
-    return st.st_size;
+    if (st.st_mode&S_IFREG)
+        return st.st_size;
+    else if (st.st_mode&S_IFBLK) {
+#ifdef __MACH__
+        int h= open(filename.c_str(), O_RDONLY);
+        uint64_t bkcount;
+        uint32_t bksize;
+        if (-1==ioctl(h, DKIOCGETBLOCKCOUNT, &bkcount)) {
+            error("ioctl(DKIOCGETBLOCKCOUNT)");
+            return 0;
+        }
+        if (-1==ioctl(h, DKIOCGETBLOCKSIZE, &bksize)) {
+            error("ioctl(DKIOCGETBLOCKSIZE)");
+            return 0;
+        }
+        close(h);
+        return bkcount*bksize;
+#else
+        int h= open(filename.c_str(), O_RDONLY);
+        uint64_t devsize;
+        if (-1==ioctl(h, BLKGETSIZE64, &devsize)) {
+            error("ioctl(BLKGETSIZE64)");
+            return 0;
+        }
+        close(h);
+        return devsize;
+#endif
+    }
+    else {
+        printf("could not get size for device\n");
+    }
 #endif
 }
 
