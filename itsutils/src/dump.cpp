@@ -26,6 +26,8 @@
 //    * improved hexdumper
 //    * check for identical lines -before- converting to string
 //    * use MmapReader/FileReader/BlockDevice where appropriate
+//    * bug: dump -o 0x14 -f -4 -w 22 -s 0x56  file
+//        -> crash
 //
 // done:
 //    * dump -s STEP {-md5|-sum}
@@ -274,11 +276,13 @@ typedef std::vector<CryptHash*> CryptHashList;
     }
     fclose(f);
 
-    if (nSameCount==1)
-        writedumpline(llOffset-g_llStepSize, prevline);
-    else if (nSameCount>1)
-        debug("*  [ 0x%x lines ]\n", nSameCount);
-    writedumpline(llOffset, "");
+    if (g_dumpformat!=DUMP_RAW) {
+        if (nSameCount==1)
+            writedumpline(llOffset-g_llStepSize, prevline);
+        else if (nSameCount>1)
+            debug("*  [ 0x%x lines ]\n", nSameCount);
+        writedumpline(llOffset, "");
+    }
 
     return true;
 }
