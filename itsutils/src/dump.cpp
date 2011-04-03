@@ -76,7 +76,7 @@
 namespace std {
 size_t min(int64_t a, size_t b)
 {
-    return (a<b) ? a : b;
+    return b>=__INTMAX_MAX__ ? a : (a<b) ? a : b;
 }
 }
 DumpUnitType g_dumpunit=DUMPUNIT_BYTE;
@@ -609,6 +609,7 @@ int64_t GetFileSize(const std::string& filename)
     }
     else {
         printf("could not get size for device\n");
+        return -1;
     }
 #endif
 }
