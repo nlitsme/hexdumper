@@ -76,7 +76,11 @@
 namespace std {
 size_t min(int64_t a, size_t b)
 {
+#ifdef _WIN32
+    return (a<b) ? a : b;
+#else
     return b>=__INTMAX_MAX__ ? a : (a<b) ? a : b;
+#endif
 }
 }
 DumpUnitType g_dumpunit=DUMPUNIT_BYTE;
