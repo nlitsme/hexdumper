@@ -88,6 +88,7 @@ DumpFormat g_dumpformat= DUMP_HEX_ASCII;
 int g_hashtype= 0;
 unsigned long g_crc_initval= 0;
 unsigned long g_crc_poly= 0xEDB88320;
+unsigned long g_crc_bits= 32;
 
 int g_nMaxUnitsPerLine=-1;
 int64_t g_llStepSize= 0;
@@ -638,6 +639,7 @@ void usage()
     printf("    -sha256: print sha256 of selected memory range\n");
 #endif
     printf("    -crc   : print crc32 of selected memory range\n");
+    printf("    -crc:INIT:POLY:bits  default: -crc:0:0xEDB88320:32\n");
     printf("    -h     : calc all known hash types\n");
     printf("    -f     : full - do not summarize identical lines\n");
     printf("    -S N   : summarize threshold\n");
@@ -722,6 +724,10 @@ int main(int argc, char **argv)
                                   colon = strchr(colon+1, ':');
                                   if (colon) {
                                       g_crc_poly= strtoul(colon+1, NULL, 0);
+                                      colon = strchr(colon+1, ':');
+                                      if (colon) {
+                                          g_crc_bits= strtoul(colon+1, NULL, 0);
+                                      }
                                   }
                               }
                           }
