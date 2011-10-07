@@ -294,6 +294,10 @@ typedef std::vector<CryptHash*> CryptHashList;
 
 bool Dumpfile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
+    if (g_nMaxUnitsPerLine>=MAXUNITSPERLINE) {
+        printf("WARNING: -w 0x%x too large\n", g_nMaxUnitsPerLine);
+        return false;
+    }
     uint32_t flags= hexdumpflags(g_dumpunit, g_nMaxUnitsPerLine, g_dumpformat)
         | (g_fulldump?0:HEXDUMP_SUMMARIZE) | (g_dumpformat==DUMP_RAW?0:HEXDUMP_WITH_OFFSET);
 
