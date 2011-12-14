@@ -230,7 +230,7 @@ typedef std::vector<CryptHash*> CryptHashList;
         else if (g_dumpformat==DUMP_SUM) {
             DATASUM sum;
             CRC32 crc(g_crc_initval, g_crc_poly);
-            CRC32 crc1(~0, g_crc_poly);
+            CRC32 crc1(~g_crc_initval, g_crc_poly);
             sum.add_data(vectorptr(buffer), buffer.size());
             crc.add_data(vectorptr(buffer), buffer.size());
             crc1.add_data(vectorptr(buffer), buffer.size());
@@ -364,7 +364,7 @@ typedef std::vector<CryptHash*> CryptHashList;
 
     DATASUM sum;
     CRC32 crc(g_crc_initval, g_crc_poly);
-    CRC32 crc1(~0, g_crc_poly);
+    CRC32 crc1(~g_crc_initval, g_crc_poly);
 
     ByteVector buf;
     while (llLength>0)
