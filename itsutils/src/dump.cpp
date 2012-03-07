@@ -115,7 +115,7 @@ bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
 {
     ByteVector buffer;
     std::string prevline;
-    int nSameCount= 0;
+    unsigned nSameCount= 0;
 
     bool fromStdin= srcFilename=="-";
 
@@ -252,7 +252,7 @@ typedef std::vector<CryptHash*> CryptHashList;
             line.resize(line.size()-1);
 
         if (g_dumpformat==DUMP_RAW)
-            fwrite(vectorptr(buffer), 1, buffer.size(), stdout);
+            fwrite(&buffer[0], 1, buffer.size(), stdout);
         else if (!g_fulldump && line == prevline) {
             nSameCount++;
         }
@@ -399,7 +399,7 @@ typedef std::vector<CryptHash*> CryptHashList;
             crc1.add_data(vectorptr(buf), buf.size());
         }
         else if (g_dumpformat==DUMP_RAW)
-            fwrite(vectorptr(buf), 1, buf.size(), stdout);
+            fwrite(&buf[0], 1, buf.size(), stdout);
         else
             bighexdump(llOffset, buf, flags | (llLength!=nRead ? HEXDUMP_MOREFOLLOWS : 0) );
 
@@ -487,7 +487,7 @@ bool CopyFileSteps(const std::string& srcFilename, const std::string& dstFilenam
         if (dwNumberOfBytesRead==0)
             break;
 
-        fwrite(vectorptr(buffer), 1, buffer.size(), g);
+        fwrite(&buffer[0], 1, buffer.size(), g);
 
         int64_t llStep= std::min(llLength, g_llStepSize);
         if (f==stdin) {
@@ -555,7 +555,7 @@ bool Copyfile(const std::string& srcFilename, const std::string& dstFilename, in
 
         buf.resize(nRead);
 
-        fwrite(vectorptr(buf), 1, buf.size(), g);
+        fwrite(&buf[0], 1, buf.size(), g);
 
         llLength -= nRead;
         llOffset += nRead;

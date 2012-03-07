@@ -172,7 +172,7 @@ public:
     bool Close() { return true; }
     bool InitHash(int type)
     {
-        if (type<0 || type>=NRHASHTYPES)
+        if (type<0 || type>=(int)NRHASHTYPES)
             return false;
         m_type= type;
         m_state.resize(hashdefs[m_type].statesize);
@@ -191,7 +191,7 @@ public:
     }
     bool CalcHash(const ByteVector& data, ByteVector& hash, int type)
     {
-        if (type<0 || type>=NRHASHTYPES) return false;
+        if (type<0 || type>=(int)NRHASHTYPES) return false;
         hash.resize(hashdefs[type].hashsize);
         return NULL!=hashdefs[type].calc(vectorptr(data), data.size(), vectorptr(hash));
     }
