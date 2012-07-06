@@ -710,10 +710,12 @@ int main(int argc, char **argv)
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD5;
                       }
+#ifdef MD2_DIGEST_LENGTH
                       else if (stringcompare(argv[i]+1, "md2")==0) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD2;
                       }
+#endif
                       else if (stringcompare(argv[i]+1, "md4")==0) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD4;
