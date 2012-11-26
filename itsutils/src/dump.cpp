@@ -645,6 +645,7 @@ void usage()
 #endif
     printf("    -crc   : print crc32 of selected memory range\n");
     printf("    -crc:INIT:POLY:bits  default: -crc:0:0xEDB88320:32\n");
+    printf("    -sum   : print checksums of selected memory range\n");
     printf("    -h     : calc all known hash types\n");
     printf("    -f     : full - do not summarize identical lines\n");
     printf("    -S N   : summarize threshold\n");
@@ -749,7 +750,7 @@ int main(int argc, char **argv)
                       else
                           g_dumpformat= DUMP_HEX; 
                       break;
-            case '1': case '2': case '4':
+            case '1': case '2': case '4': case '8':
                 nDumpUnitSize= argv[i][1]-'0';
                 break;
             default:
