@@ -785,7 +785,8 @@ int main(int argc, char **argv)
     g_dumpunit= 
         nDumpUnitSize==1?DUMPUNIT_BYTE:
         nDumpUnitSize==2?DUMPUNIT_WORD:
-        nDumpUnitSize==4?DUMPUNIT_DWORD:DUMPUNIT_BYTE;
+        nDumpUnitSize==4?DUMPUNIT_DWORD:
+        nDumpUnitSize==8?DUMPUNIT_QWORD:DUMPUNIT_BYTE;
 
     if (g_dumpformat==DUMP_RAW) {
 #ifdef WIN32
