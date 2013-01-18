@@ -95,7 +95,7 @@ int g_nMaxUnitsPerLine=-1;
 int64_t g_llStepSize= 0;
 
 bool g_fulldump= false;
-unsigned g_summarizeThreshold=-1;
+int g_summarizeThreshold=-1;
 
 uint32_t g_chunksize= 1024*1024;
 
@@ -116,7 +116,7 @@ bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
 {
     ByteVector buffer;
     std::string prevline;
-    unsigned nSameCount= 0;
+    int nSameCount= 0;
 
     bool fromStdin= srcFilename=="-";
 
@@ -258,11 +258,11 @@ typedef std::vector<CryptHash*> CryptHashList;
             nSameCount++;
         }
         else {
-            if (nSameCount>0 && nSameCount<=g_summarizeThreshold) {
-                for (unsigned i=0 ; i<nSameCount ; i++)
+            if (nSameCount>0 && (g_summarizeThreshold==-1 || nSameCount<=g_summarizeThreshold)) {
+                for (int i=0 ; i<nSameCount ; i++)
                     writedumpline(llOffset+g_llStepSize*(signed(i)-nSameCount), prevline);
             }
-            else if (nSameCount>g_summarizeThreshold)
+            else if (nSameCount>0 && g_summarizeThreshold>0 && nSameCount>g_summarizeThreshold)
                 debug("*  [ 0x%x lines ]\n", nSameCount);
             nSameCount= 0;
             writedumpline(llOffset, line);
