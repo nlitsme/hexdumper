@@ -236,10 +236,10 @@ typedef std::vector<CryptHash*> CryptHashList;
             crc.add_data(vectorptr(buffer), buffer.size());
             crc1.add_data(vectorptr(buffer), buffer.size());
 
-            line= stringformat("%08lx~%08lx  %08lx~%08lx +%02x LE:%04x %08lx  BE:%04x %08lx  ^%02x %04x %08lx", 
+            line= stringformat("%08lx~%08lx  %08lx~%08lx +%02llx LE:%04llx %08llx %16llx BE:%04llx %08llx %16llx ^%02x %04x %08lx %016llx", 
                 crc.crc, ~crc.crc, crc1.crc, ~crc1.crc, 
-                sum.sum1, sum.sum2_le, sum.sum4_le, sum.sum2_be, sum.sum4_be,
-                sum.sumxor1, sum.sumxor2, sum.sumxor4);
+                sum.sum1, sum.sum2_le, sum.sum4_le, sum.sum8_le, sum.sum2_be, sum.sum4_be, sum.sum8_be,
+                sum.sumxor1, sum.sumxor2, sum.sumxor4, sum.sumxor8);
         }
         else if (g_dumpformat==DUMP_STRINGS)
             line= ascdump(buffer);
@@ -434,8 +434,10 @@ typedef std::vector<CryptHash*> CryptHashList;
     else if (g_dumpformat==DUMP_SUM) {
         debug("crc0=%08lx invcrc=%08lx\n", crc.crc, ~crc.crc);
         debug("crc-1=%08lx invcrc=%08lx\n", crc1.crc, ~crc1.crc);
-        debug("addsum=%02x LE:%04x %08lx  BE:%04x %08lx  sumxor=%02x %04x %08lx\n", 
-                sum.sum1, sum.sum2_le, sum.sum4_le, sum.sum2_be, sum.sum4_be, sum.sumxor1, sum.sumxor2, sum.sumxor4);
+        debug("addsum=%02llx LE:%04llx %08llx %16llx BE:%04llx %08llx %16llx sumxor=%02x %04x %08lx %016llx\n", 
+                sum.sum1, sum.sum2_le, sum.sum4_le, sum.sum8_le,
+                sum.sum2_be, sum.sum4_be, sum.sum8_be,
+                sum.sumxor1, sum.sumxor2, sum.sumxor4, sum.sumxor8);
     }
     return true;
 }
