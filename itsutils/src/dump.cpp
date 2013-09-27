@@ -809,6 +809,14 @@ int main(int argc, char **argv)
         }
         llOffset += llFileSize;
     }
+    if (llLength<0) {
+        if (fromStdin) {
+            printf("dumping end of stdin stream not yet implemented\n");
+            return 1;
+        }
+        llLength += llFileSize;
+    }
+
 
     if (llLength==0 && fromStdin)
         llLength= INT64_MAX;
