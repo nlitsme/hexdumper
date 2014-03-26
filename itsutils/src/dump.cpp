@@ -50,17 +50,28 @@
 #endif
 #ifndef _WIN32
 #include <sys/stat.h>
+
+#ifdef __MACH__
 #include <sys/disk.h>
+#else
+#include <linux/fs.h>
+#endif
+
 #include <sys/ioctl.h>
 #include <unistd.h>
 #endif
 #include <fcntl.h>
+
 #ifdef _USE_WINCRYPTAPI
 #include "dump_hash.h"
-#endif
-#ifdef _USE_OPENSSL
+#elif defined(_USE_OPENSSL)
 #include "dump_ossl_hash.h"
+#elif defined(__ANDROID__)
+#include "dump_android_hash.h"
+#else
+#include "dump_dummy_hash.h"
 #endif
+
 #include "dump_crc32.h"
 #include "dump_sum.h"
 #include "debug.h"
@@ -69,10 +80,6 @@
 #include <stdint.h>
 #include <string.h>
 #include <algorithm>
-
-#ifdef WIN32
-#define fseeko _fseeki64
-#endif
 
 namespace std {
 size_t min(int64_t a, size_t b)
@@ -111,7 +118,36 @@ void skipbytes(FILE *f, int64_t skip)
         skip-=want;
     }
 }
-
+int longseek(FILE *f, int64_t delta, int type)
+{
+    // todo: lseek64(fileno(f), delta, type);
+#if defined(_ANDROID) || defined(ANDROID)
+    if (type!=SEEK_CUR) {
+        if (delta<0x40000000) {
+            return fseek(f, delta, type);
+        }
+        fseek(f, 0, type);
+    }
+    if (delta>0) {
+        while (delta>=0x40000000) {
+            fseek(f, 0x40000000, SEEK_CUR);
+            delta -= 0x40000000;
+        }
+        fseek(f, delta, SEEK_CUR);
+    }
+    else {
+        while (delta<=-0x40000000) {
+            fseek(f, -0x40000000, SEEK_CUR);
+            delta += 0x40000000;
+        }
+        fseek(f, delta, SEEK_CUR);
+    }
+#elif defined(_WIN32)
+    return _fseeki64(f, delta, type);
+#else
+    return fseeko(f, delta, type);
+#endif
+}
 bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     ByteVector buffer;
@@ -142,9 +178,8 @@ bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
     if (f==stdin) {
         skipbytes(f, llOffset-llBaseOffset);
     }
-    else if (fseeko(f, llOffset-llBaseOffset, SEEK_SET))
+    else if (longseek(f, llOffset-llBaseOffset, SEEK_SET))
     {
-        error("fseeko");
         fclose(f);
     }
 
@@ -272,9 +307,8 @@ typedef std::vector<CryptHash*> CryptHashList;
         if (f==stdin) {
             skipbytes(f, llStep-dwNumberOfBytesRead);
         }
-        else if (fseeko(f, llStep-dwNumberOfBytesRead, SEEK_CUR))
+        else if (longseek(f, llStep-dwNumberOfBytesRead, SEEK_CUR))
         {
-            error("fseeko");
             fclose(f);
         }
         llLength -= llStep;
@@ -325,9 +359,8 @@ bool Dumpfile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
     if (f==stdin) {
         skipbytes(f, llOffset-llBaseOffset);
     }
-    else if (fseeko(f, llOffset-llBaseOffset, SEEK_SET))
+    else if (longseek(f, llOffset-llBaseOffset, SEEK_SET))
     {
-        error("fseeko");
         fclose(f);
     }
 
@@ -347,11 +380,8 @@ typedef std::vector<CryptHash*> CryptHashList;
     CryptHashList hashes;
     if (g_dumpformat==DUMP_HASHES) {
 
-#define VALIDALGS 0x701e
         for (int ihash=0 ; ihash<CryptHash::HASHTYPECOUNT ; ihash++) {
 #ifdef _USE_WINCRYPTAPI
-            if (((1<<ihash)&VALIDALGS)==0)
-                continue;
             hashes.push_back(new CryptHash(cprov));
 #else
             hashes.push_back(new CryptHash);
@@ -469,9 +499,8 @@ bool CopyFileSteps(const std::string& srcFilename, const std::string& dstFilenam
     if (f==stdin) {
         skipbytes(f, llOffset-llBaseOffset);
     }
-    else if (fseeko(f, llOffset-llBaseOffset, SEEK_SET))
+    else if (longseek(f, llOffset-llBaseOffset, SEEK_SET))
     {
-        error("fseeko");
         fclose(f);
     }
     FILE *g= fopen(dstFilename.c_str(), "w+b");
@@ -496,9 +525,8 @@ bool CopyFileSteps(const std::string& srcFilename, const std::string& dstFilenam
         if (f==stdin) {
             skipbytes(f, llStep-dwNumberOfBytesRead);
         }
-        else if (fseeko(f, llStep-dwNumberOfBytesRead, SEEK_CUR))
+        else if (longseek(f, llStep-dwNumberOfBytesRead, SEEK_CUR))
         {
-            error("fseeko");
             fclose(f);
         }
 
@@ -535,9 +563,8 @@ bool Copyfile(const std::string& srcFilename, const std::string& dstFilename, in
     if (f==stdin) {
         skipbytes(f, llOffset-llBaseOffset);
     }
-    else if (fseeko(f, llOffset-llBaseOffset, SEEK_SET))
+    else if (longseek(f, llOffset-llBaseOffset, SEEK_SET))
     {
-        error("fseeko");
         fclose(f);
     }
     FILE *g= fopen(dstFilename.c_str(), "w+b");
@@ -640,8 +667,12 @@ void usage()
     printf("    -r SIZE   : read chunk size, default 1M\n");
     printf("    -1,2,4    : what to print: byte, word, dword\n");
     printf("    -a     : ascdump iso hexdump\n");
+#ifdef MD5_DIGEST_LENGTH
     printf("    -md5   : print md5sum of selected memory range\n");
+#endif
+#ifdef SHA1_DIGEST_LENGTH
     printf("    -sha1  : print sha1 of selected memory range\n");
+#endif
 #ifdef SHA256_DIGEST_LENGTH
     printf("    -sha256: print sha256 of selected memory range\n");
 #endif
@@ -679,13 +710,26 @@ int main(int argc, char **argv)
             case 'e': HANDLELLOPTION(llEndOffset, int64_t); break;
             case 'l': HANDLELLOPTION(llLength, int64_t); break;
 
-            case 'r': HANDLEULOPTION(g_chunksize, uint32_t); break;
+            case 'r': 
+#ifdef RIPEMD160_DIGEST_LENGTH
+                      if (stringcompare(argv[i]+1, "ripemd160")==0) {
+                          g_dumpformat= DUMP_HASH;
+                          g_hashtype= CryptHash::RIPEMD160;
+                      }
+                      else
+#endif
+ 
+                      HANDLEULOPTION(g_chunksize, uint32_t); break;
 
             case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, int); break;
-            case 's': if (stringcompare(argv[i]+1, "sha1")==0) {
+            case 's': if (0)
+                          ;
+#ifdef SHA1_DIGEST_LENGTH
+                      else if (stringcompare(argv[i]+1, "sha1")==0) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA1;
                       }
+#endif
 #ifdef SHA256_DIGEST_LENGTH
                       else if (stringcompare(argv[i]+1, "sha256")==0) {
                           g_dumpformat= DUMP_HASH;
@@ -704,25 +748,39 @@ int main(int argc, char **argv)
                           g_hashtype= CryptHash::SHA512;
                       }
 #endif
+
                       else if (stringcompare(argv[i]+1, "sum")==0)
                           g_dumpformat= DUMP_SUM;
                       else
                           HANDLELLOPTION(g_llStepSize, int64_t);
                       break;
-            case 'm': if (stringcompare(argv[i]+1, "md5")==0) {
+            case 'm': if (0)
+                          ;
+#ifdef MD5_DIGEST_LENGTH
+                      else if (stringcompare(argv[i]+1, "md5")==0) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD5;
                       }
+#endif
 #ifdef MD2_DIGEST_LENGTH
                       else if (stringcompare(argv[i]+1, "md2")==0) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD2;
                       }
 #endif
+#ifdef MD4_DIGEST_LENGTH
                       else if (stringcompare(argv[i]+1, "md4")==0) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD4;
                       }
+#endif
+#ifdef RIPEMD160_DIGEST_LENGTH
+                      else if (stringcompare(argv[i]+1, "md160")==0) {
+                          g_dumpformat= DUMP_HASH;
+                          g_hashtype= CryptHash::RIPEMD160;
+                      }
+#endif
+
                       break;
             case 'a': g_dumpformat= DUMP_STRINGS; break;
             case 'c': if (std::string(argv[i]+1, 3)=="crc") {

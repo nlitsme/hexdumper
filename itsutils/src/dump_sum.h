@@ -1,7 +1,7 @@
 
 #ifndef __DUMP_SUM_H__
 #define __DUMP_SUM_H__
-
+#include "util/endianutil.h"
 class DATASUM {
 public:
     uint64_t sumxor8;
