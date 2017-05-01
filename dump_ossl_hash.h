@@ -4,9 +4,13 @@
 #include <openssl/ripemd.h>
 #include <openssl/sha.h>
 
-#include "debug.h"
-#include "vectorutils.h"
-#include "stringutils.h"
+#include <vector>
+
+//#include "debug.h"
+//#include "vectorutils.h"
+//#include "stringutils.h"
+
+
 
 /*  --  hash("")  for various algorithms
 md2            8350e5a3e24c153df2275c9f80692773
@@ -128,11 +132,14 @@ struct hashdefinition hashdefs[]= {
     // unix passwd crypt ( des, md5, ...)
     // various hmac's, with user supplied key
 };
+
+#define vectorptr(v)  ((v).empty()?NULL:&(v)[0])
+
 #define NRHASHTYPES (sizeof(hashdefs)/sizeof(*hashdefs))
 class CryptHash {
 private:
     int m_type;
-    ByteVector m_state;
+    std::vector<uint8_t>  m_state;
 public:
     enum { 
 #ifdef MD2_DIGEST_LENGTH
@@ -178,25 +185,25 @@ public:
         m_state.resize(hashdefs[m_type].statesize);
         return 0!=hashdefs[m_type].init(vectorptr(m_state));
     }
-    bool AddData(const ByteVector& data)
+    bool AddData(const std::vector<uint8_t> & data)
     {
         if (m_type<0) return false;
         return 0!=hashdefs[m_type].update(vectorptr(m_state), vectorptr(data), data.size());
     }
-    bool GetHash(ByteVector& hash)
+    bool GetHash(std::vector<uint8_t> & hash)
     {
         if (m_type<0) return false;
         hash.resize(hashdefs[m_type].hashsize);
         return 0!=hashdefs[m_type].final(vectorptr(hash), vectorptr(m_state));
     }
-    bool CalcHash(const ByteVector& data, ByteVector& hash, int type)
+    bool CalcHash(const std::vector<uint8_t> & data, std::vector<uint8_t> & hash, int type)
     {
         if (type<0 || type>=(int)NRHASHTYPES) return false;
         hash.resize(hashdefs[type].hashsize);
         return NULL!=hashdefs[type].calc(vectorptr(data), data.size(), vectorptr(hash));
     }
     int hashtype() const { return m_type; }
-    std::string hashname() const
+    const char *hashname() const
     {
         if (m_type<0) return "unknown";
         return hashdefs[m_type].name;

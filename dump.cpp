@@ -43,7 +43,7 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <util/wintypes.h>
+//#include <util/wintypes.h>
 #include <stdio.h>
 #ifdef _WIN32
 #include <io.h>
@@ -74,12 +74,16 @@
 
 #include "dump_crc32.h"
 #include "dump_sum.h"
-#include "debug.h"
-#include "stringutils.h"
-#include "args.h"
+#include "bighexdump.h"
+#include "bigascdump.h"
+#include "formatter.h"
+#include "stringlibrary.h"
+#include "argparse.h"
 #include <stdint.h>
 #include <string.h>
 #include <algorithm>
+
+#define vectorptr(v)  ((v).empty()?NULL:&(v)[0])
 
 namespace std {
 size_t min(int64_t a, size_t b)
@@ -106,10 +110,28 @@ int g_summarizeThreshold=-1;
 
 uint32_t g_chunksize= 1024*1024;
 
+std::string hexstring(const std::vector<uint8_t>& bv)
+{
+    return stringformat("%-b", bv);
+}
+std::string hexdump(uint64_t ofs, const uint8_t *p, size_t n, int type, int width)
+{
+    std::stringstream buf;
+    buf << hex::offset(ofs) << std::hex << std::setw(width) << std::left;
+    switch(type)
+    {
+        case 1: buf << hex::dumper((const uint8_t*)p, n); break;
+        case 2: buf << hex::dumper((const uint16_t*)p, n); break;
+        case 4: buf << hex::dumper((const uint32_t*)p, n); break;
+        case 8: buf << hex::dumper((const uint64_t*)p, n); break;
+    }
+    return buf.str();
+}
+
 // skipbytes is used for non-seekable files ( like stdin )
 void skipbytes(FILE *f, int64_t skip)
 {
-    ByteVector buf;
+    std::vector<uint8_t> buf;
     buf.resize(std::min(skip,g_chunksize));
 
     while (skip) {
@@ -126,21 +148,21 @@ int longseek(FILE *f, int64_t delta, int type)
         if (delta<0x40000000) {
             return fseek(f, delta, type);
         }
-        fseek(f, 0, type);
+        return fseek(f, 0, type);
     }
     if (delta>0) {
         while (delta>=0x40000000) {
             fseek(f, 0x40000000, SEEK_CUR);
             delta -= 0x40000000;
         }
-        fseek(f, delta, SEEK_CUR);
+        return fseek(f, delta, SEEK_CUR);
     }
     else {
         while (delta<=-0x40000000) {
             fseek(f, -0x40000000, SEEK_CUR);
             delta += 0x40000000;
         }
-        fseek(f, delta, SEEK_CUR);
+        return fseek(f, delta, SEEK_CUR);
     }
 #elif defined(_WIN32)
     return _fseeki64(f, delta, type);
@@ -150,7 +172,7 @@ int longseek(FILE *f, int64_t delta, int type)
 }
 bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
-    ByteVector buffer;
+    std::vector<uint8_t> buffer;
     std::string prevline;
     int nSameCount= 0;
 
@@ -161,7 +183,7 @@ bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
         f= stdin;
 #ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
-            error("_setmode(stdin, rb)");
+            print("ERROR: _setmode(stdin, rb)");
             return false;
         }
 #endif
@@ -208,19 +230,19 @@ bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
 #define HASHTYPEOFFSET 0
 #endif
             if (!hashcalc.InitHash(g_hashtype)) {
-                error("CryptHash.init");
+                print("ERROR: CryptHash.init");
                 return false;
             }
             if (!hashcalc.AddData(buffer)) {
-                error("CryptHash.add");
+                print("ERROR: CryptHash.add");
                 break;
             }
-            ByteVector hash;
+            std::vector<uint8_t> hash;
             if (!hashcalc.GetHash(hash)) {
-                error("CryptHash.final");
+                print("ERROR: CryptHash.final");
                 return false;
             }
-            line= hash_as_string(hash);
+            line= hexstring(hash);
         }
         else if (g_dumpformat==DUMP_HASHES) {
 typedef std::vector<CryptHash*> CryptHashList;
@@ -247,14 +269,14 @@ typedef std::vector<CryptHash*> CryptHashList;
             line.clear();
             for (CryptHashList::iterator ih= hashes.begin() ; ih!=hashes.end() ; ih++)
             {
-                ByteVector hash;
+                std::vector<uint8_t> hash;
                 if (!(*ih)->GetHash(hash)) {
-                    error("Gethash(%08lx - %s)", (*ih)->hashtype(), (*ih)->hashname().c_str());
+                    print("ERROR: Gethash(%08lx - %s)", (*ih)->hashtype(), (*ih)->hashname());
                 }
                 else {
                     if (!line.empty())
                         line += " ";
-                    line += hash_as_string(hash);
+                    line += hexstring(hash);
                 }
             }
         }
@@ -277,12 +299,12 @@ typedef std::vector<CryptHash*> CryptHashList;
                 sum.sumxor1, sum.sumxor2, sum.sumxor4, sum.sumxor8);
         }
         else if (g_dumpformat==DUMP_STRINGS)
-            line= ascdump(buffer);
+            line= bigascdump(buffer);
         else if (g_dumpformat==DUMP_ASCII)
             line= asciidump(vectorptr(buffer), dwNumberOfBytesRead);
         else {
             line= hexdump(llOffset, vectorptr(buffer), dwNumberOfBytesRead, DumpUnitSize(g_dumpunit), g_nMaxUnitsPerLine);
-	            line.erase(0, line.find_first_of(' ')+1);
+            line.erase(0, line.find_first_of(' ')+1);
         }
         if (*line.rbegin()=='\n')
             line.resize(line.size()-1);
@@ -298,7 +320,7 @@ typedef std::vector<CryptHash*> CryptHashList;
                     writedumpline(llOffset+g_llStepSize*(signed(i)-nSameCount), prevline);
             }
             else if (nSameCount>0 && g_summarizeThreshold>0 && nSameCount>g_summarizeThreshold)
-                debug("*  [ 0x%x lines ]\n", nSameCount);
+                print("*  [ 0x%x lines ]\n", nSameCount);
             nSameCount= 0;
             writedumpline(llOffset, line);
         }
@@ -320,7 +342,7 @@ typedef std::vector<CryptHash*> CryptHashList;
         if (nSameCount==1)
             writedumpline(llOffset-g_llStepSize, prevline);
         else if (nSameCount>1)
-            debug("*  [ 0x%x lines ]\n", nSameCount);
+            print("*  [ 0x%x lines ]\n", nSameCount);
         writedumpline(llOffset, "");
     }
 
@@ -343,7 +365,7 @@ bool Dumpfile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
         f= stdin;
 #ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
-            error("_setmode(stdin, rb)");
+            print("ERROR: _setmode(stdin, rb)");
             return false;
         }
 #endif
@@ -373,7 +395,7 @@ bool Dumpfile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
 #define HASHTYPEOFFSET 0
 #endif
     if (g_dumpformat==DUMP_HASH && !hashcalc.InitHash(g_hashtype)) {
-        error("CryptHash.init");
+        print("ERROR: CryptHash.init");
         return false;
     }
 typedef std::vector<CryptHash*> CryptHashList;
@@ -397,7 +419,7 @@ typedef std::vector<CryptHash*> CryptHashList;
     CRC32 crc(g_crc_initval, g_crc_poly);
     CRC32 crc1(~g_crc_initval, g_crc_poly);
 
-    ByteVector buf;
+    std::vector<uint8_t> buf;
     while (llLength>0)
     {
         buf.resize(g_chunksize);
@@ -411,7 +433,7 @@ typedef std::vector<CryptHash*> CryptHashList;
 
         if (g_dumpformat==DUMP_HASH) {
             if (!hashcalc.AddData(buf)) {
-                error("CryptHash.add");
+                print("ERROR: CryptHash.add");
                 break;
             }
         }
@@ -439,32 +461,32 @@ typedef std::vector<CryptHash*> CryptHashList;
     }
     fclose(f);
     if (g_dumpformat==DUMP_HASH) {
-        ByteVector hash;
+        std::vector<uint8_t> hash;
         if (!hashcalc.GetHash(hash)) {
-            error("CryptHash.final");
+            print("ERROR: CryptHash.final");
             return false;
         }
-        debug("%s\n", hash_as_string(hash).c_str());
+        print("%s\n", hexstring(hash));
     }
     else if (g_dumpformat==DUMP_HASHES) {
         for (CryptHashList::iterator ih= hashes.begin() ; ih!=hashes.end() ; ih++)
         {
-            ByteVector hash;
+            std::vector<uint8_t> hash;
             if (!(*ih)->GetHash(hash)) {
-                error("Gethash(%08lx - %s)", (*ih)->hashtype(), (*ih)->hashname().c_str());
+                print("ERROR: Gethash(%08lx - %s)", (*ih)->hashtype(), (*ih)->hashname());
             }
             else {
-                debug("%-10s: %s\n", (*ih)->hashname().c_str(), hash_as_string(hash).c_str());
+                print("%-10s: %s\n", (*ih)->hashname(), hexstring(hash));
             }
         }
     }
     else if (g_dumpformat==DUMP_CRC32) {
-        debug("crc=%08lx invcrc=%08lx\n", crc.crc, ~crc.crc);
+        print("crc=%08lx invcrc=%08lx\n", crc.crc, ~crc.crc);
     }
     else if (g_dumpformat==DUMP_SUM) {
-        debug("crc0=%08lx invcrc=%08lx\n", crc.crc, ~crc.crc);
-        debug("crc-1=%08lx invcrc=%08lx\n", crc1.crc, ~crc1.crc);
-        debug("addsum=%02llx LE:%04llx %08llx %16llx BE:%04llx %08llx %16llx sumxor=%02x %04x %08lx %016llx\n", 
+        print("crc0=%08lx invcrc=%08lx\n", crc.crc, ~crc.crc);
+        print("crc-1=%08lx invcrc=%08lx\n", crc1.crc, ~crc1.crc);
+        print("addsum=%02llx LE:%04llx %08llx %16llx BE:%04llx %08llx %16llx sumxor=%02x %04x %08lx %016llx\n", 
                 sum.sum1, sum.sum2_le, sum.sum4_le, sum.sum8_le,
                 sum.sum2_be, sum.sum4_be, sum.sum8_be,
                 sum.sumxor1, sum.sumxor2, sum.sumxor4, sum.sumxor8);
@@ -474,7 +496,7 @@ typedef std::vector<CryptHash*> CryptHashList;
 
 bool CopyFileSteps(const std::string& srcFilename, const std::string& dstFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
-    ByteVector buffer;
+    std::vector<uint8_t> buffer;
 
     bool fromStdin= srcFilename=="-";
 
@@ -483,7 +505,7 @@ bool CopyFileSteps(const std::string& srcFilename, const std::string& dstFilenam
         f= stdin;
 #ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
-            error("_setmode(stdin, rb)");
+            print("ERROR: _setmode(stdin, rb)");
             return false;
         }
 #endif
@@ -547,7 +569,7 @@ bool Copyfile(const std::string& srcFilename, const std::string& dstFilename, in
         f= stdin;
 #ifdef WIN32
         if (-1==_setmode( _fileno( stdin ), _O_BINARY )) {
-            error("_setmode(stdin, rb)");
+            print("ERROR: _setmode(stdin, rb)");
             return false;
         }
 #endif
@@ -573,7 +595,7 @@ bool Copyfile(const std::string& srcFilename, const std::string& dstFilename, in
         return false;
     }
 
-    ByteVector buf;
+    std::vector<uint8_t> buf;
     while (llLength>0)
     {
         buf.resize(g_chunksize);
@@ -602,7 +624,7 @@ int64_t GetFileSize(const std::string& filename)
                 NULL, OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, NULL);
     if (INVALID_HANDLE_VALUE == hSrc)
     {
-        error("Unable to open file %s", filename.c_str());
+        print("ERROR: Unable to open file %s", filename.c_str());
         return 0;
     }
 
@@ -615,7 +637,7 @@ int64_t GetFileSize(const std::string& filename)
 #else
     struct stat st;
     if (lstat(filename.c_str(), &st)) {
-        error("lstat");
+        print("ERROR: lstat");
         return 0;
     }
     if (st.st_mode&S_IFREG)
@@ -626,11 +648,11 @@ int64_t GetFileSize(const std::string& filename)
         uint64_t bkcount;
         uint32_t bksize;
         if (-1==ioctl(h, DKIOCGETBLOCKCOUNT, &bkcount)) {
-            error("ioctl(DKIOCGETBLOCKCOUNT)");
+            print("ERROR: ioctl(DKIOCGETBLOCKCOUNT)");
             return 0;
         }
         if (-1==ioctl(h, DKIOCGETBLOCKSIZE, &bksize)) {
-            error("ioctl(DKIOCGETBLOCKSIZE)");
+            print("ERROR: ioctl(DKIOCGETBLOCKSIZE)");
             return 0;
         }
         close(h);
@@ -639,7 +661,7 @@ int64_t GetFileSize(const std::string& filename)
         int h= open(filename.c_str(), O_RDONLY);
         uint64_t devsize;
         if (-1==ioctl(h, BLKGETSIZE64, &devsize)) {
-            error("ioctl(BLKGETSIZE64)");
+            print("ERROR: ioctl(BLKGETSIZE64)");
             return 0;
         }
         close(h);
@@ -689,93 +711,93 @@ void usage()
 }
 int main(int argc, char **argv)
 {
-    int64_t llOffset=0;
+    int64_t llOffset=0;     bool haveOffset = false;
     int64_t llEndOffset=0;
     int64_t llLength=0;
     int64_t llBaseOffset=0;
     std::string srcFilename;
     std::string dstFilename;
     int nDumpUnitSize=1;
-
-    DebugStdOut();
+    std::string crcspec;
 
     int argsfound=0; 
-    for (int i=1 ; i<argc ; i++)
-    {
-        if (argv[i][0]=='-' && argv[i][1]) switch (argv[i][1])
+    for (auto& arg : ArgParser(argc, argv))
+        switch(arg.option())
         {
-            case 'b': HANDLELLOPTION(llBaseOffset, int64_t); break;
+            case 'b': llBaseOffset = arg.getint(); break;
             case 'h': g_dumpformat= DUMP_HASHES; break;
-            case 'o': HANDLELLOPTION(llOffset, int64_t); break;
-            case 'e': HANDLELLOPTION(llEndOffset, int64_t); break;
-            case 'l': HANDLELLOPTION(llLength, int64_t); break;
+            case 'o': llOffset = arg.getint(); haveOffset = true; break;
+            case 'e': llEndOffset = arg.getint(); break;
+            case 'l': llLength = arg.getint(); break;
 
             case 'r': 
 #ifdef RIPEMD160_DIGEST_LENGTH
-                      if (stringcompare(argv[i]+1, "ripemd160")==0) {
+                      if (arg.match("-ripemd160")) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::RIPEMD160;
                       }
                       else
 #endif
  
-                      HANDLEULOPTION(g_chunksize, uint32_t); break;
+                      g_chunksize = arg.getuint(); break;
 
-            case 'w': HANDLEULOPTION(g_nMaxUnitsPerLine, int); break;
+            case 'w': g_nMaxUnitsPerLine = arg.getint(); break;
             case 's': if (0)
                           ;
 #ifdef SHA1_DIGEST_LENGTH
-                      else if (stringcompare(argv[i]+1, "sha1")==0) {
+                      else if (arg.match("-sha1")) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA1;
                       }
 #endif
+#if !defined(__ANDROID__)
 #ifdef SHA256_DIGEST_LENGTH
-                      else if (stringcompare(argv[i]+1, "sha256")==0) {
+                      else if (arg.match("-sha256")) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA256;
                       }
 #endif
 #ifdef SHA384_DIGEST_LENGTH
-                      else if (stringcompare(argv[i]+1, "sha384")==0) {
+                      else if (arg.match("-sha384")) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA384;
                       }
 #endif
 #ifdef SHA512_DIGEST_LENGTH
-                      else if (stringcompare(argv[i]+1, "sha512")==0) {
+                      else if (arg.match("-sha512")) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::SHA512;
                       }
 #endif
+#endif
 
-                      else if (stringcompare(argv[i]+1, "sum")==0)
+                      else if (arg.match("-sum"))
                           g_dumpformat= DUMP_SUM;
                       else
-                          HANDLELLOPTION(g_llStepSize, int64_t);
+                          g_llStepSize = arg.getint();
                       break;
             case 'm': if (0)
                           ;
 #ifdef MD5_DIGEST_LENGTH
-                      else if (stringcompare(argv[i]+1, "md5")==0) {
+                      else if (arg.match("-md5")) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD5;
                       }
 #endif
 #ifdef MD2_DIGEST_LENGTH
-                      else if (stringcompare(argv[i]+1, "md2")==0) {
+                      else if (arg.match("-md2")) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD2;
                       }
 #endif
 #ifdef MD4_DIGEST_LENGTH
-                      else if (stringcompare(argv[i]+1, "md4")==0) {
+                      else if (arg.match("-md4")) {
                           g_dumpformat= DUMP_HASH; 
                           g_hashtype= CryptHash::MD4;
                       }
 #endif
 #ifdef RIPEMD160_DIGEST_LENGTH
-                      else if (stringcompare(argv[i]+1, "md160")==0) {
+                      else if (arg.match("-md160")) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::RIPEMD160;
                       }
@@ -783,49 +805,54 @@ int main(int argc, char **argv)
 
                       break;
             case 'a': g_dumpformat= DUMP_STRINGS; break;
-            case 'c': if (std::string(argv[i]+1, 3)=="crc") {
+            case 'c': if (arg.match("-crc")) {
                           g_dumpformat= DUMP_CRC32; 
-                          if (argv[i][4]) {
-                              char *colon= strchr(argv[i], ':');
-                              if (colon) {
-                                  g_crc_initval= strtoul(colon+1, NULL, 0);
-                                  colon = strchr(colon+1, ':');
-                                  if (colon) {
-                                      g_crc_poly= strtoul(colon+1, NULL, 0);
-                                      colon = strchr(colon+1, ':');
-                                      if (colon) {
-                                          g_crc_bits= strtoul(colon+1, NULL, 0);
-                                      }
-                                  }
-                              }
-                          }
+                          crcspec = arg.getstr();
                       }
                       else
                           g_dumpformat= DUMP_RAW; 
                       break;
             case 'f': g_fulldump= true; break;
-            case 'S': HANDLEULOPTION(g_summarizeThreshold, unsigned); break;
-            case 'x': if (argv[i][2]=='x')
+            case 'S': g_summarizeThreshold = arg.getuint(); break;
+            case 'x': if (arg.count()==2)
                           g_dumpformat= DUMP_ASCII; 
                       else
                           g_dumpformat= DUMP_HEX; 
                       break;
             case '1': case '2': case '4': case '8':
-                nDumpUnitSize= argv[i][1]-'0';
+                nDumpUnitSize= arg.option()-'0';
                 break;
+            case -1:
+                switch (argsfound++) {
+                    case 0: srcFilename= arg.getstr(); break;
+                    case 1: dstFilename= arg.getstr(); break;
+                }
+                break;
+
             default:
                 usage();
                 return 1;
         }
-        else switch (argsfound++) {
-            case 0: srcFilename= argv[i]; break;
-            case 1: dstFilename= argv[i]; break;
-        }
-    }
     if (argsfound==0 || argsfound>2)
     {
         usage();
         return 1;
+    }
+
+    if (!crcspec.empty()) {
+        auto icolon = crcspec.find(':');
+        if (icolon!=crcspec.npos) {
+            auto res1 = parseunsigned(crcspec.begin()+icolon+1, crcspec.end(), 0);
+            g_crc_initval= res1.first;
+            if (res1.second!=crcspec.end()) {
+                auto res2 = parseunsigned(res1.second+1, crcspec.end(), 0);
+                g_crc_poly= res2.first;
+                if (res2.second!=crcspec.end()) {
+                    auto res3 = parseunsigned(res2.second+1, crcspec.end(), 0);
+                    g_crc_bits= res3.first;
+                }
+            }
+        }
     }
 
     // 64 = highest 2^n, such that addrsize + 2^n <= screenwidth
@@ -851,7 +878,7 @@ int main(int argc, char **argv)
     if (g_dumpformat==DUMP_RAW) {
 #ifdef WIN32
         if (-1==_setmode( _fileno( stdout ), _O_BINARY )) {
-            error("_setmode(stdout, rb)");
+            print("ERROR: _setmode(stdout, rb)");
             return 1;
         }
 #endif
@@ -883,10 +910,6 @@ int main(int argc, char **argv)
 
     if (llLength==0)
         llLength= llFileSize;
-
-    // todo: i think i meant something different here - need to fix.
-    if (llOffset < llBaseOffset && llOffset+0x80000000 > llBaseOffset)
-        llOffset= llBaseOffset;
 
     if (!dstFilename.empty()) {
         if (g_llStepSize)

@@ -1,5 +1,4 @@
-#ifndef __DUMP_CRC32_H__
-#define __DUMP_CRC32_H__
+#pragma once
 
 #include "crc32.h"
 
@@ -23,4 +22,3 @@ public:
     }
 };
 
-#endif

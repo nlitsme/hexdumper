@@ -1,7 +1,5 @@
+#pragma once
 
-#ifndef __DUMP_SUM_H__
-#define __DUMP_SUM_H__
-#include "util/endianutil.h"
 class DATASUM {
 public:
     uint64_t sumxor8;
@@ -25,6 +23,15 @@ public:
     {
         memset(data, 0, 8);
     }
+
+    static uint8_t get8(const unsigned char*p) { return *p; }
+    static uint16_t get16le(const unsigned char*p) { return (get8(p+1)<<8) + get8(p); }
+    static uint32_t get32le(const unsigned char*p) { return (get16le(p+2)<<16) + get16le(p); }
+    static uint64_t get64le(const unsigned char*p) { return (uint64_t(get32le(p+4))<<32) + get32le(p); }
+    static uint16_t get16be(const unsigned char*p) { return (get8(p)<<8) + get8(p+1); }
+    static uint32_t get32be(const unsigned char*p) { return (get16be(p)<<16) + get16be(p+2); }
+    static uint64_t get64be(const unsigned char*p) { return (uint64_t(get32be(p))<<32) + get32be(p+4); }
+
     void add_byte(unsigned char byte)
     {
         data[idx & 7]= byte;
@@ -60,6 +67,4 @@ public:
         while (length--) add_byte(*data++);
     }
 };
-
-#endif
 
