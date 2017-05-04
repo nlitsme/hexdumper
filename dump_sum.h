@@ -1,4 +1,5 @@
 #pragma once
+// calculate simple additive or xorring checksums.
 
 class DATASUM {
 public:

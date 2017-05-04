@@ -1,12 +1,13 @@
 #pragma once
+// some basic crc calculations with the crc32 polynomial.
 
 #include "crc32.h"
 
 class CRC32 {
-    CRCCalc<uint32_t> _calc;
+    CRCCalc<uint64_t> _calc;
 public:
-    uint32_t crc;
-    CRC32(uint32_t crc=0, uint32_t poly= 0xEDB88320, int bits=32)
+    uint64_t crc;
+    CRC32(uint64_t crc=0, uint64_t poly= 0xEDB88320, int bits=32)
         : _calc(poly, bits), crc(crc)
     {
     }

@@ -1,4 +1,5 @@
 #include <vector>
+// hashing functions for android - sha1 and md5 are present in libc.a
 
 typedef int (*PFN_Init)(void *state);
 typedef int (*PFN_Update)(void *state, const unsigned char *data, size_t len);

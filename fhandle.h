@@ -9,7 +9,7 @@ struct filehandle {
     filehandle(int f) : f(f) { 
         if (f==-1) {
             perror("open");
-            throw "invalid filehandle";
+            throw std::runtime_error("invalid filehandle");
         }
     }
     ~filehandle() { if (f!=-1) close(f); }

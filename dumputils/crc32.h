@@ -69,8 +69,5 @@ private:
 };
 
 
-uint32_t add_to_crc32(uint32_t prev, uint8_t c);
-uint32_t calccrc32(const uint8_t*buf, uint32_t len);
-
 #define __CRC32_H__
 #endif

@@ -1,4 +1,4 @@
-
+// hash functions for microsoft platforms.
 #include <wincrypt.h>
 #include "vectorutils.h"
 #include "stringutils.h"

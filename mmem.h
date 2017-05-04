@@ -1,4 +1,5 @@
 #pragma once
+// class wrappong a memmapped object
 
 #include <sys/mman.h>
 #include <unistd.h>
@@ -50,7 +51,7 @@ struct mappedmem {
             printf("l=%llx, mm=%x, s=%llx\n", phys_length, mmapmode, phys_start);
             printf("start=%llx -> %llx,   end=%llx -> %llx\n", start, phys_start, end, phys_end);
             perror("mmap");
-            throw "mmap";
+            throw std::runtime_error("mmap");
         }
 
         dataofs= start - phys_start;

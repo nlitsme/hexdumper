@@ -98,9 +98,9 @@ size_t min(int64_t a, size_t b)
 DumpUnitType g_dumpunit=DUMPUNIT_BYTE;
 DumpFormat g_dumpformat= DUMP_HEX_ASCII;
 int g_hashtype= 0;
-unsigned long g_crc_initval= 0;
-unsigned long g_crc_poly= 0xEDB88320;
-unsigned long g_crc_bits= 32;
+uint64_t g_crc_initval= 0;
+uint64_t g_crc_poly= 0xEDB88320;
+uint64_t g_crc_bits= 32;
 
 int g_nMaxUnitsPerLine=-1;
 int64_t g_llStepSize= 0;
@@ -127,6 +127,14 @@ std::string hexdump(uint64_t ofs, const uint8_t *p, size_t n, int type, int widt
     }
     return buf.str();
 }
+int highestbit(uint64_t num)
+{
+}
+uint64_t invmask(int bits)
+{
+    return (uint64_t(1)<<bits)-1;
+}
+
 
 // skipbytes is used for non-seekable files ( like stdin )
 void skipbytes(FILE *f, int64_t skip)
@@ -140,6 +148,8 @@ void skipbytes(FILE *f, int64_t skip)
         skip-=want;
     }
 }
+
+// seek > 4G when only 32 bit api is available.
 int longseek(FILE *f, int64_t delta, int type)
 {
     // todo: lseek64(fileno(f), delta, type);
@@ -170,6 +180,8 @@ int longseek(FILE *f, int64_t delta, int type)
     return fseeko(f, delta, type);
 #endif
 }
+
+// hexdump stepped chunks of the file.
 bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     std::vector<uint8_t> buffer;
@@ -281,20 +293,20 @@ typedef std::vector<CryptHash*> CryptHashList;
             }
         }
         else if (g_dumpformat==DUMP_CRC32) {
-            CRC32 crc(g_crc_initval, g_crc_poly);
+            CRC32 crc(g_crc_initval, g_crc_poly, g_crc_bits);
             crc.add_data(vectorptr(buffer), buffer.size());
-            line= stringformat("%08lx~%08lx", crc.crc, ~crc.crc);
+            line= stringformat("%08lx~%08lx", crc.crc, crc.crc^invmask(g_crc_bits));
         }
         else if (g_dumpformat==DUMP_SUM) {
             DATASUM sum;
-            CRC32 crc(g_crc_initval, g_crc_poly);
-            CRC32 crc1(~g_crc_initval, g_crc_poly);
+            CRC32 crc(g_crc_initval, g_crc_poly, g_crc_bits);
+            CRC32 crc1(~g_crc_initval, g_crc_poly, g_crc_bits);
             sum.add_data(vectorptr(buffer), buffer.size());
             crc.add_data(vectorptr(buffer), buffer.size());
             crc1.add_data(vectorptr(buffer), buffer.size());
 
-            line= stringformat("%08lx~%08lx  %08lx~%08lx +%02llx LE:%04llx %08llx %16llx BE:%04llx %08llx %16llx ^%02x %04x %08lx %016llx", 
-                crc.crc, ~crc.crc, crc1.crc, ~crc1.crc, 
+            line= stringformat("%08llx~%08llx  %08llx~%08llx +%02llx LE:%04llx %08llx %16llx BE:%04llx %08llx %16llx ^%02x %04x %08lx %016llx", 
+                crc.crc, crc.crc^invmask(g_crc_bits), crc1.crc, crc1.crc^invmask(g_crc_bits), 
                 sum.sum1, sum.sum2_le, sum.sum4_le, sum.sum8_le, sum.sum2_be, sum.sum4_be, sum.sum8_be,
                 sum.sumxor1, sum.sumxor2, sum.sumxor4, sum.sumxor8);
         }
@@ -349,6 +361,7 @@ typedef std::vector<CryptHash*> CryptHashList;
     return true;
 }
 
+// normal hexdump of file
 bool Dumpfile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     if (g_nMaxUnitsPerLine>=MAXUNITSPERLINE) {
@@ -416,8 +429,8 @@ typedef std::vector<CryptHash*> CryptHashList;
     }
 
     DATASUM sum;
-    CRC32 crc(g_crc_initval, g_crc_poly);
-    CRC32 crc1(~g_crc_initval, g_crc_poly);
+    CRC32 crc(g_crc_initval, g_crc_poly, g_crc_bits);
+    CRC32 crc1(~g_crc_initval, g_crc_poly, g_crc_bits);
 
     std::vector<uint8_t> buf;
     while (llLength>0)
@@ -481,11 +494,11 @@ typedef std::vector<CryptHash*> CryptHashList;
         }
     }
     else if (g_dumpformat==DUMP_CRC32) {
-        print("crc=%08lx invcrc=%08lx\n", crc.crc, ~crc.crc);
+        print("crc=%08llx invcrc=%08llx\n", crc.crc, crc.crc^invmask(g_crc_bits));
     }
     else if (g_dumpformat==DUMP_SUM) {
-        print("crc0=%08lx invcrc=%08lx\n", crc.crc, ~crc.crc);
-        print("crc-1=%08lx invcrc=%08lx\n", crc1.crc, ~crc1.crc);
+        print("crc0=%08llx invcrc=%08llx\n", crc.crc, crc.crc^invmask(g_crc_bits));
+        print("crc-1=%08llx invcrc=%08llx\n", crc1.crc, crc1.crc^invmask(g_crc_bits));
         print("addsum=%02llx LE:%04llx %08llx %16llx BE:%04llx %08llx %16llx sumxor=%02x %04x %08lx %016llx\n", 
                 sum.sum1, sum.sum2_le, sum.sum4_le, sum.sum8_le,
                 sum.sum2_be, sum.sum4_be, sum.sum8_be,
@@ -494,6 +507,7 @@ typedef std::vector<CryptHash*> CryptHashList;
     return true;
 }
 
+// copy multiple chunks of srcfile to dstfile
 bool CopyFileSteps(const std::string& srcFilename, const std::string& dstFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     std::vector<uint8_t> buffer;
@@ -559,6 +573,8 @@ bool CopyFileSteps(const std::string& srcFilename, const std::string& dstFilenam
     fclose(f);
     return true;
 }
+
+// copy section of srcfile to dstfile
 bool Copyfile(const std::string& srcFilename, const std::string& dstFilename, int64_t llBaseOffset, int64_t llOffset, int64_t llLength)
 {
     FILE *f= NULL;
@@ -617,6 +633,8 @@ bool Copyfile(const std::string& srcFilename, const std::string& dstFilename, in
     fclose(f);
     return true;
 }
+
+// filesize for various platforms, files, blockdevice.
 int64_t GetFileSize(const std::string& filename)
 {
 #ifdef WIN32
@@ -674,7 +692,6 @@ int64_t GetFileSize(const std::string& filename)
     }
 #endif
 }
-
 void usage()
 {
     printf("(C) 2003-2008 Willem jan Hengeveld  itsme@xs4all.nl\n");
@@ -822,6 +839,7 @@ int main(int argc, char **argv)
             case '1': case '2': case '4': case '8':
                 nDumpUnitSize= arg.option()-'0';
                 break;
+            case 0: // single '-'
             case -1:
                 switch (argsfound++) {
                     case 0: srcFilename= arg.getstr(); break;
@@ -840,17 +858,15 @@ int main(int argc, char **argv)
     }
 
     if (!crcspec.empty()) {
-        auto icolon = crcspec.find(':');
-        if (icolon!=crcspec.npos) {
-            auto res1 = parseunsigned(crcspec.begin()+icolon+1, crcspec.end(), 0);
-            g_crc_initval= res1.first;
-            if (res1.second!=crcspec.end()) {
-                auto res2 = parseunsigned(res1.second+1, crcspec.end(), 0);
-                g_crc_poly= res2.first;
-                if (res2.second!=crcspec.end()) {
-                    auto res3 = parseunsigned(res2.second+1, crcspec.end(), 0);
-                    g_crc_bits= res3.first;
-                }
+        auto res1 = parsesigned(crcspec.begin(), crcspec.end(), 0);
+        g_crc_initval= res1.first;
+        if (res1.second!=crcspec.end()) {
+            auto res2 = parseunsigned(res1.second+1, crcspec.end(), 0);
+            g_crc_poly= res2.first;
+            if (res2.second!=crcspec.end()) {
+                auto res3 = parseunsigned(res2.second+1, crcspec.end(), 0);
+                g_crc_bits= res3.first;
+
             }
         }
     }
