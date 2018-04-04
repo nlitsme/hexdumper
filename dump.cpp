@@ -28,6 +28,7 @@
 //    * use MmapReader/FileReader/BlockDevice where appropriate
 //    * bug: dump -o 0x14 -f -4 -w 22 -s 0x56  file
 //        -> crash
+//    * bug: "dump - -o 11 -e 0x20d"  should give the same output as "dump - -o 11 -l 0x202" -> it does not!
 //
 // done:
 //    * dump -s STEP {-md5|-sum}
@@ -921,8 +922,9 @@ int main(int argc, char **argv)
 
     if (llLength==0 && fromStdin)
         llLength= INT64_MAX;
+
     if (llLength==0 && llEndOffset)
-        llLength= llEndOffset-llOffset;
+        llLength= llEndOffset-llOffset;  // NOTE: this will not work for stdin!
 
     if (llLength==0)
         llLength= llFileSize;
