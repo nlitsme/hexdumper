@@ -16,7 +16,34 @@ the basic structure of unknown files.
  * repeating lines are summarized.
  * you can have a hexdump with either hexbytes, hex + ascii, only ascii. or a string dump. ( `-a`, `-x`, `-xx` )
  * you can read from files, block devices, stdin.
- * you can not hexdump, but copy the selected file section to stdout or another file. ( `-c` or filename )
+ * you can copy the selected file section to stdout or another file. ( `-c` or filename )
+
+
+options
+-------
+
+ * -b BASEOFFSET   make listing appear at the specified offset
+ * -h              print all known cryptographic hashes for the selection
+ * -o START        start offset for selection, taking into account the base offset.
+ * -e END          end offset for the selection
+ * -l LENGTH       length starting at 'start', either specify '-e' or '-l'
+ * -r CHUNKSIZE    in what chunks to read from the file/device.
+ * -w DISPLAYWIDTH how many items to print on each line
+ * -s STEPSIZE     amount to skip forward after each line.
+ * -a              output as strings, one per line.
+ * -c              output the raw bytes
+ * -f              don't summarize identical lines
+ * -S THRESHOLD    minimum number of identical lines to sumarize
+ * -x              hexdump only, no ascii
+ * -xx             ascii only, no hexdump
+ * -1, -2, -4, -8  size of items to print ( byte, short, dword, qword )
+ * -md5, -md160, -md2, -md5, -sha1, -sha256, -sha384, -sha512  various types o hashes.
+ * -crc[:start:poly] what crc to calculate.
+ * -sum            print various types of checksums.
+
+ * an input file.
+ * optionally a output file.
+
 
 
 dump2
