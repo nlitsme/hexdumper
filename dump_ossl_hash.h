@@ -84,11 +84,6 @@ typedef SHA512_CTX SHA384_CTX;
 #ifdef SHA256_DIGEST_LENGTH
 typedef SHA256_CTX SHA224_CTX;
 #endif
-#ifndef OPENSSL_NO_SHA1
-#define SHA1_DIGEST_LENGTH SHA_DIGEST_LENGTH
-typedef SHA_CTX SHA1_CTX;
-#endif
-
 struct hashdefinition hashdefs[]= {
 #ifdef MD2_DIGEST_LENGTH
 {"MD2",   sizeof(MD2_CTX), MD2_DIGEST_LENGTH, (PFN_Init)MD2_Init, (PFN_Update)MD2_Update, (PFN_Final)MD2_Final, MD2},
@@ -99,8 +94,8 @@ struct hashdefinition hashdefs[]= {
 #ifdef MD5_DIGEST_LENGTH
 {"MD5",   sizeof(MD5_CTX), MD5_DIGEST_LENGTH, (PFN_Init)MD5_Init, (PFN_Update)MD5_Update, (PFN_Final)MD5_Final, MD5},
 #endif
-#ifdef SHA_DIGEST_LENGTH
-{"SHA",   sizeof(SHA_CTX), SHA_DIGEST_LENGTH, (PFN_Init)SHA_Init, (PFN_Update)SHA_Update, (PFN_Final)SHA_Final, SHA},
+#ifdef SHA1_DIGEST_LENGTH
+{"SHA",   sizeof(SHA1_CTX), SHA1_DIGEST_LENGTH, (PFN_Init)SHA1_Init, (PFN_Update)SHA1_Update, (PFN_Final)SHA1_Final, SHA},
 #endif
 #ifdef SHA1_DIGEST_LENGTH
 {"SHA1",   sizeof(SHA1_CTX), SHA1_DIGEST_LENGTH, (PFN_Init)SHA1_Init, (PFN_Update)SHA1_Update, (PFN_Final)SHA1_Final, SHA},
@@ -117,8 +112,10 @@ struct hashdefinition hashdefs[]= {
 #ifdef SHA512_DIGEST_LENGTH
 {"SHA512",   sizeof(SHA512_CTX), SHA512_DIGEST_LENGTH, (PFN_Init)SHA512_Init, (PFN_Update)SHA512_Update, (PFN_Final)SHA512_Final, SHA512 },
 #endif
+#if !defined(__ANDROID__)
 #ifdef RIPEMD160_DIGEST_LENGTH
 {"RIPEMD160",   sizeof(RIPEMD160_CTX), RIPEMD160_DIGEST_LENGTH, (PFN_Init)RIPEMD160_Init, (PFN_Update)RIPEMD160_Update, (PFN_Final)RIPEMD160_Final, RIPEMD160 },
+#endif
 #endif
 
     // todo: add whirlpool
@@ -153,8 +150,8 @@ public:
 #ifdef MD5_DIGEST_LENGTH
             MD5,
 #endif
-#ifdef SHA_DIGEST_LENGTH
-            SHA,
+#ifdef SHA1_DIGEST_LENGTH
+            SHA1,
 #endif
 #ifdef SHA1_DIGEST_LENGTH
             SHA1,
@@ -171,8 +168,10 @@ public:
 #ifdef SHA512_DIGEST_LENGTH
             SHA512,
 #endif
+#if !defined(__ANDROID__)
 #ifdef RIPEMD160_DIGEST_LENGTH
             RIPEMD160,
+#endif
 #endif
             HASHTYPECOUNT 
     }; 
