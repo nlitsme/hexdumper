@@ -22,7 +22,8 @@ public:
 
     DATASUM() : sumxor8(0), sumxor4(0), sumxor2(0), sumxor1(0), sum8_le(0), sum4_le(0), sum2_le(0), sum8_be(0), sum4_be(0), sum2_be(0), sum1(0), idx(0)
     {
-        memset(data, 0, 8);
+        for (int i=0 ; i<8 ; i++)
+            data[i] = 0;
     }
 
     static uint8_t get8(const unsigned char*p) { return *p; }
