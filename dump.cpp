@@ -54,7 +54,8 @@
 
 #ifdef __MACH__
 #include <sys/disk.h>
-#else
+#endif
+#ifdef __linux__
 #include <linux/fs.h>
 #endif
 
