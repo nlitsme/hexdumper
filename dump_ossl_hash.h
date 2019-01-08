@@ -7,6 +7,7 @@
 #include <openssl/sha.h>
 
 #include <vector>
+#include <stdint.h>
 
 //#include "debug.h"
 //#include "vectorutils.h"
