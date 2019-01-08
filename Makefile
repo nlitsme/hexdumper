@@ -1,4 +1,3 @@
-CXX=clang++
 OPENSSLDIR=$(lastword $(wildcard /usr/local/Cellar/openssl/1.0.*))
 CXXFLAGS+=-DBOOST_NO_CXX11_NUMERIC_LIMITS -std=c++1z -D_USE_OPENSSL
 CXXFLAGS+=-g -Wall -c $(if $(D),-O0,-O3) -I cpputils -I dumputils -D_UNIX -D_NO_RAPI  -I /usr/local/include -I$(OPENSSLDIR)/include
