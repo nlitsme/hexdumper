@@ -18,6 +18,7 @@ struct mappedmem {
     uint8_t *pmem;
     uint64_t phys_length;
     uint64_t dataofs;
+    uint64_t length;
 
     static uint64_t round_up(uint64_t ofs, uint64_t base)
     {
@@ -45,11 +46,12 @@ struct mappedmem {
         uint64_t phys_end= round_up(end, pagesize);
 
         phys_length= phys_end - phys_start;
+        length = end - start;
 
         pmem= (uint8_t*)mymmap(NULL, phys_length, mmapmode, MAP_SHARED, f, mmapoffset(phys_start));
         if (pmem==MAP_FAILED) {
-            printf("l=%llx, mm=%x, s=%llx\n", phys_length, mmapmode, phys_start);
-            printf("start=%llx -> %llx,   end=%llx -> %llx\n", start, phys_start, end, phys_end);
+            //printf("l=%llx, mm=%x, s=%llx\n", phys_length, mmapmode, phys_start);
+            //printf("start=%llx -> %llx,   end=%llx -> %llx\n", start, phys_start, end, phys_end);
             perror("mmap");
             throw std::runtime_error("mmap");
         }
@@ -68,6 +70,19 @@ struct mappedmem {
     uint8_t *ptr()
     {
         return pmem+dataofs;
+    }
+
+    uint8_t *begin()
+    {
+        return ptr();
+    }
+    uint8_t *end()
+    {
+        return ptr() + length;
+    }
+    size_t size()
+    {
+        return length;
     }
 };
 
