@@ -5,7 +5,7 @@
 std::string asciidump(const uint8_t *p, size_t n)
 {
     std::stringstream buf;
-    buf << hex::ascstring << hex::dumper(p, n);
+    buf << Hex::ascstring << Hex::dumper(p, n);
     return buf.str();
 
 }

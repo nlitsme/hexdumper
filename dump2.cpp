@@ -122,10 +122,10 @@ int main(int argc, char**argv)
     std::cout << std::setw(nUnitsPerLine);
     std::cout << std::setprecision(nDumpUnitSize);
     std::cout << std::hex;
-    std::cout << hex::step(llStepSize);
+    std::cout << Hex::step(llStepSize);
     if (bSummarize)
         std::cout << std::skipws;
-    std::cout << hex::offset(llOffset);
-    std::cout << hex::dumper(m.ptr(), m.ptr()+llLength);
+    std::cout << Hex::offset(llOffset);
+    std::cout << Hex::dumper(m.ptr(), m.ptr()+llLength);
 
 }

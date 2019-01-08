@@ -83,6 +83,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <algorithm>
+#include "hexdumper.h"
 
 #define vectorptr(v)  ((v).empty()?NULL:&(v)[0])
 
@@ -118,18 +119,15 @@ std::string hexstring(const std::vector<uint8_t>& bv)
 std::string hexdump(uint64_t ofs, const uint8_t *p, size_t n, int type, int width)
 {
     std::stringstream buf;
-    buf << hex::offset(ofs) << std::hex << std::setw(width) << std::left;
+    buf << Hex::offset(ofs) << std::hex << std::setw(width) << std::left;
     switch(type)
     {
-        case 1: buf << hex::dumper((const uint8_t*)p, n); break;
-        case 2: buf << hex::dumper((const uint16_t*)p, n); break;
-        case 4: buf << hex::dumper((const uint32_t*)p, n); break;
-        case 8: buf << hex::dumper((const uint64_t*)p, n); break;
+        case 1: buf << Hex::dumper((const uint8_t*)p, n); break;
+        case 2: buf << Hex::dumper((const uint16_t*)p, n); break;
+        case 4: buf << Hex::dumper((const uint32_t*)p, n); break;
+        case 8: buf << Hex::dumper((const uint64_t*)p, n); break;
     }
     return buf.str();
-}
-int highestbit(uint64_t num)
-{
 }
 uint64_t invmask(int bits)
 {
@@ -749,12 +747,14 @@ int main(int argc, char **argv)
             case 'l': llLength = arg.getint(); break;
 
             case 'r': 
+#if !defined(__ANDROID__)
 #ifdef RIPEMD160_DIGEST_LENGTH
                       if (arg.match("-ripemd160")) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::RIPEMD160;
                       }
                       else
+#endif
 #endif
  
                       g_chunksize = arg.getuint(); break;
@@ -814,11 +814,13 @@ int main(int argc, char **argv)
                           g_hashtype= CryptHash::MD4;
                       }
 #endif
+#if !defined(__ANDROID__)
 #ifdef RIPEMD160_DIGEST_LENGTH
                       else if (arg.match("-md160")) {
                           g_dumpformat= DUMP_HASH;
                           g_hashtype= CryptHash::RIPEMD160;
                       }
+#endif
 #endif
 
                       break;
