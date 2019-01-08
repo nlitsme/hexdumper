@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <string.h>
 #include <algorithm>
 #include <vector>
 #include "argparse.h"
