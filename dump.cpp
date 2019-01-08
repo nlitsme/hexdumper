@@ -660,30 +660,32 @@ int64_t GetFileSize(const std::string& filename)
     if (st.st_mode&S_IFREG)
         return st.st_size;
     else if (st.st_mode&S_IFBLK) {
-#ifdef __MACH__
         int h= open(filename.c_str(), O_RDONLY);
+        uint64_t devsize;
+#ifdef DKIOCGETBLOCKCOUNT
         uint64_t bkcount;
         uint32_t bksize;
         if (-1==ioctl(h, DKIOCGETBLOCKCOUNT, &bkcount)) {
+            close(h);
             print("ERROR: ioctl(DKIOCGETBLOCKCOUNT)");
             return 0;
         }
         if (-1==ioctl(h, DKIOCGETBLOCKSIZE, &bksize)) {
+            close(h);
             print("ERROR: ioctl(DKIOCGETBLOCKSIZE)");
             return 0;
         }
-        close(h);
-        return bkcount*bksize;
-#else
-        int h= open(filename.c_str(), O_RDONLY);
-        uint64_t devsize;
+        devsize = bkcount*bksize;
+#endif
+#ifdef BLKGETSIZE64
         if (-1==ioctl(h, BLKGETSIZE64, &devsize)) {
+            close(h);
             print("ERROR: ioctl(BLKGETSIZE64)");
             return 0;
         }
+#endif
         close(h);
         return devsize;
-#endif
     }
     else {
         printf("could not get size for device\n");
