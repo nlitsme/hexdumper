@@ -21,7 +21,7 @@ LDFLAGS+=-lcrypto
 	$(CXX) $(CXXFLAGS) $(filter %.cpp,$^) -o $@  $(cflags_$(basename $(notdir $@)))
 
 %: %.o
-	$(CXX) $(LDFLAGS) $^ -o $@ $(foreach i,$^,$(ldflags_$(basename $(notdir $i)))) $(exeflags_$(basename $(notdir $@)))
+	$(CXX) $^ -o $@ $(foreach i,$^,$(ldflags_$(basename $(notdir $i)))) $(exeflags_$(basename $(notdir $@)))  $(LDFLAGS)
 
 clean:
 	$(RM) -r a.out* $(wildcard *.o *.dSYM) dump dump2
