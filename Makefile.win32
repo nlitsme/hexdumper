@@ -1,17 +1,16 @@
 CXXFLAGS+=/DBOOST_NO_CXX11_NUMERIC_LIMITS /D_USE_WINCRYPTAPI
-CXXFLAGS+=/Zi /Wall $(if $(D),/O0,/O2) /I cpputils /I dumputils 
+CXXFLAGS+=/Zi /Wall $(if $(D),/O0,/O2) /I cpputils /I dumputils /EHsc /DNOMINMAX
+LDFLAGS=advapi32.lib
 
-
-all: dump.exe dump2.exe
+all: dump.exe
 
 pull:
 	git  submodule foreach 'git pull'
 
 dump.exe: dump.obj bighexdump.obj bigascdump.obj
-dump2.exe: dump2.obj 
 
 %.obj: dumputils/%.cpp
-	$(CXX) $(CXXFLAGS) $^ /c /Fo:$@ 
+	$(CXX) $(CXXFLAGS) $^ /c /Fo:$@
 %.obj: %.cpp
 	$(CXX) $(CXXFLAGS) $(filter %.cpp,$^) /c /Fo:$@  $(cflags_$(basename $(notdir $@)))
 
@@ -19,6 +18,6 @@ dump2.exe: dump2.obj
 	$(CXX) $^ /Fe:$@ $(foreach i,$^,$(ldflags_$(basename $(notdir $i)))) $(exeflags_$(basename $(notdir $@)))  $(LDFLAGS)
 
 clean:
-	$(RM) $(wildcard *.obj *.pdb) dump.exe dump2.exe
+	$(RM) $(wildcard *.obj *.pdb) dump.exe
 
 
