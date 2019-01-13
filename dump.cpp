@@ -62,6 +62,10 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #endif
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <fcntl.h>
 
 #ifdef _USE_WINCRYPTAPI
@@ -241,19 +245,10 @@ bool StepFile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
             CryptHash hashcalc;
 #define HASHTYPEOFFSET 0
 #endif
-            if (!hashcalc.InitHash(g_hashtype)) {
-                print("ERROR: CryptHash.init");
-                return false;
-            }
-            if (!hashcalc.AddData(buffer)) {
-                print("ERROR: CryptHash.add");
-                break;
-            }
-            std::vector<uint8_t> hash;
-            if (!hashcalc.GetHash(hash)) {
-                print("ERROR: CryptHash.final");
-                return false;
-            }
+            hashcalc.InitHash(g_hashtype);
+            hashcalc.AddData(buffer);
+
+            std::vector<uint8_t> hash = hashcalc.GetHash();
             line= hexstring(hash);
         }
         else if (g_dumpformat==DUMP_HASHES) {
@@ -269,7 +264,10 @@ typedef std::vector<CryptHash*> CryptHashList;
 #else
                 hashes.push_back(new CryptHash);
 #endif
-                if (!hashes.back()->InitHash(ihash+HASHTYPEOFFSET)) {
+                try {
+                hashes.back()->InitHash(ihash+HASHTYPEOFFSET);
+                }
+                catch(...) {
                     delete hashes.back();
                     hashes.resize(hashes.size()-1);
                 }
@@ -281,15 +279,10 @@ typedef std::vector<CryptHash*> CryptHashList;
             line.clear();
             for (CryptHashList::iterator ih= hashes.begin() ; ih!=hashes.end() ; ih++)
             {
-                std::vector<uint8_t> hash;
-                if (!(*ih)->GetHash(hash)) {
-                    print("ERROR: Gethash(%08lx - %s)", (*ih)->hashtype(), (*ih)->hashname());
-                }
-                else {
-                    if (!line.empty())
-                        line += " ";
-                    line += hexstring(hash);
-                }
+                std::vector<uint8_t> hash = (*ih)->GetHash();
+                if (!line.empty())
+                    line += " ";
+                line += hexstring(hash);
             }
         }
         else if (g_dumpformat==DUMP_CRC32) {
@@ -400,17 +393,16 @@ bool Dumpfile(const std::string& srcFilename, int64_t llBaseOffset, int64_t llOf
     }
 
 #ifdef _USE_WINCRYPTAPI
-	CryptProvider cprov;
+    CryptProvider cprov;
     CryptHash hashcalc(cprov);
 #define HASHTYPEOFFSET (ALG_CLASS_HASH | ALG_TYPE_ANY)
 #else
     CryptHash hashcalc;
 #define HASHTYPEOFFSET 0
 #endif
-    if (g_dumpformat==DUMP_HASH && !hashcalc.InitHash(g_hashtype)) {
-        print("ERROR: CryptHash.init");
-        return false;
-    }
+    if (g_dumpformat==DUMP_HASH)
+        hashcalc.InitHash(g_hashtype);
+
 typedef std::vector<CryptHash*> CryptHashList;
     CryptHashList hashes;
     if (g_dumpformat==DUMP_HASHES) {
@@ -421,10 +413,13 @@ typedef std::vector<CryptHash*> CryptHashList;
 #else
             hashes.push_back(new CryptHash);
 #endif
-			if (!hashes.back()->InitHash(ihash+HASHTYPEOFFSET)) {
-				delete hashes.back();
+            try {
+            hashes.back()->InitHash(ihash+HASHTYPEOFFSET);
+            }
+            catch(...) {
+                delete hashes.back();
                 hashes.resize(hashes.size()-1);
-			}
+            }
         }
     }
 
@@ -445,16 +440,11 @@ typedef std::vector<CryptHash*> CryptHashList;
         buf.resize(nRead);
 
         if (g_dumpformat==DUMP_HASH) {
-            if (!hashcalc.AddData(buf)) {
-                print("ERROR: CryptHash.add");
-                break;
-            }
+            hashcalc.AddData(buf);
         }
         else if (g_dumpformat==DUMP_HASHES) {
             for (CryptHashList::iterator ih= hashes.begin() ; ih!=hashes.end() ; ih++)
-            {
                 (*ih)->AddData(buf);
-            }
         }
         else if (g_dumpformat==DUMP_CRC32) {
             crc.add_data(vectorptr(buf), buf.size());
@@ -474,23 +464,14 @@ typedef std::vector<CryptHash*> CryptHashList;
     }
     fclose(f);
     if (g_dumpformat==DUMP_HASH) {
-        std::vector<uint8_t> hash;
-        if (!hashcalc.GetHash(hash)) {
-            print("ERROR: CryptHash.final");
-            return false;
-        }
+        std::vector<uint8_t> hash = hashcalc.GetHash();
         print("%s\n", hexstring(hash));
     }
     else if (g_dumpformat==DUMP_HASHES) {
         for (CryptHashList::iterator ih= hashes.begin() ; ih!=hashes.end() ; ih++)
         {
-            std::vector<uint8_t> hash;
-            if (!(*ih)->GetHash(hash)) {
-                print("ERROR: Gethash(%08lx - %s)", (*ih)->hashtype(), (*ih)->hashname());
-            }
-            else {
-                print("%-10s: %s\n", (*ih)->hashname(), hexstring(hash));
-            }
+            std::vector<uint8_t> hash = (*ih)->GetHash();
+            print("%-10s: %s\n", (*ih)->hashname(), hexstring(hash));
         }
     }
     else if (g_dumpformat==DUMP_CRC32) {

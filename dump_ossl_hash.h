@@ -179,30 +179,39 @@ public:
 
     CryptHash() : m_type(-1) { }
     bool Close() { return true; }
-    bool InitHash(int type)
+    void InitHash(int type)
     {
-        if (type<0 || type>=(int)NRHASHTYPES)
-            return false;
+        assert(type>=0 && type<(int)NRHASHTYPES);
+
         m_type= type;
         m_state.resize(hashdefs[m_type].statesize);
-        return 0!=hashdefs[m_type].init(vectorptr(m_state));
+        if (!hashdefs[m_type].init(vectorptr(m_state)))
+            throw std::runtime_error("hash-init");
     }
-    bool AddData(const std::vector<uint8_t> & data)
+    void AddData(const std::vector<uint8_t> & data)
     {
-        if (m_type<0) return false;
-        return 0!=hashdefs[m_type].update(vectorptr(m_state), vectorptr(data), data.size());
+        assert(m_type>=0);
+        if (!hashdefs[m_type].update(vectorptr(m_state), vectorptr(data), data.size()))
+            throw std::runtime_error("hash-add");
     }
-    bool GetHash(std::vector<uint8_t> & hash)
+    std::vector<uint8_t> GetHash()
     {
-        if (m_type<0) return false;
-        hash.resize(hashdefs[m_type].hashsize);
-        return 0!=hashdefs[m_type].final(vectorptr(hash), vectorptr(m_state));
+        assert(m_type>=0);
+
+        std::vector<uint8_t> hash(hashdefs[m_type].hashsize);
+        if (!hashdefs[m_type].final(vectorptr(hash), vectorptr(m_state)))
+            throw std::runtime_error("hash-final");
+
+        return hash;
     }
-    bool CalcHash(const std::vector<uint8_t> & data, std::vector<uint8_t> & hash, int type)
+    std::vector<uint8_t> CalcHash(const std::vector<uint8_t> & data, int type)
     {
-        if (type<0 || type>=(int)NRHASHTYPES) return false;
-        hash.resize(hashdefs[type].hashsize);
-        return NULL!=hashdefs[type].calc(vectorptr(data), data.size(), vectorptr(hash));
+        assert(type>=0 && type<(int)NRHASHTYPES);
+        std::vector<uint8_t> hash(hashdefs[type].hashsize);
+        if (!hashdefs[type].calc(vectorptr(data), data.size(), vectorptr(hash)))
+            throw std::runtime_error("hash-calc");
+
+        return hash;
     }
     int hashtype() const { return m_type; }
     const char *hashname() const

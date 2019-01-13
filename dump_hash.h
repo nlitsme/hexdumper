@@ -1,45 +1,52 @@
 // hash functions for microsoft platforms.
+#include <cassert>
+#include <exception>
+#include <formatter.h>
+#include <string>
 #include <wincrypt.h>
-#include "vectorutils.h"
-#include "stringutils.h"
-#include "debug.h"
 
+class winerror : std::exception {
+    DWORD _code;
+    std::string _msg;
+public:
+    winerror(const std::string& msg) : _code(GetLastError()), _msg(msg) { }
+    virtual const char* what() const noexcept
+    {
+        return stringformat("[%08x] %s", _code, _msg).c_str();
+    }
+};
 class CryptProvider {
 private:
         HCRYPTPROV m_hProv;
 public:
-	CryptProvider() : m_hProv(0) { }
-	~CryptProvider() { Close(); }
+    CryptProvider() : m_hProv(0) { }
+    ~CryptProvider() { Close(); }
 
-    bool Open()
+    void Open()
     {
         if (!CryptAcquireContext(&m_hProv, NULL, NULL, PROV_RSA_FULL, CRYPT_VERIFYCONTEXT))
         {
-            error("CryptAcquireContext");
             m_hProv= NULL;
-            return false;
+            throw winerror("CryptAcquireContext");
         }
-        return true;
     }
-    bool Close()
+    void Close()
     {
         if (m_hProv) {
             CryptReleaseContext(m_hProv, 0);
             m_hProv= NULL;
         }
-        return true;
     }
-	bool GetHandle(HCRYPTPROV &hProv)
-	{
-		if (m_hProv==NULL && !Open())
-			return false;
-		hProv= m_hProv;
-		return true;
-	}
+    HCRYPTPROV GetHandle()
+    {
+            if (m_hProv==NULL)
+                Open();
+            return m_hProv;
+    }
 };
 class CryptHash {
 private:
-	    CryptProvider &m_prov;
+        CryptProvider &m_prov;
         HCRYPTHASH m_hHash;
         int m_type;
 public:
@@ -48,18 +55,15 @@ public:
     CryptHash(CryptProvider &provider) : m_prov(provider), m_hHash(0), m_type(0) { }
 
     ~CryptHash() { Close(); }
-    bool Close()
+    void Close()
     {
         if (m_hHash!=NULL)
             CloseHash();
-        return true;
     }
 
-    bool InitHash(int type)
+    void InitHash(int type)
     {
-        HCRYPTPROV hProv;
-		if (!m_prov.GetHandle(hProv))
-			return false;
+        HCRYPTPROV hProv = m_prov.GetHandle();
 
         if (m_hHash!=NULL)
             CloseHash();
@@ -76,63 +80,46 @@ public:
         if (!CryptCreateHash(hProv, (ALG_ID)m_type, 0, 0, &m_hHash))
         {
             if (!silent)
-                error("CryptCreateHash(%08lx)", m_type);
-            return false;
+                throw winerror(stringformat("CryptCreateHash(%08lx)", m_type));
         }
-        return true;
     }
-    bool CloseHash()
+    void CloseHash()
     {
         if (m_hHash) {
             CryptDestroyHash(m_hHash);
             m_hHash= NULL;
         }
-        return true;
     }
 
-    bool AddData(const ByteVector& data)
+    void AddData(const std::vector<uint8_t>& data)
     {
-        if (m_hHash==NULL)
-            return false;
-        if (!CryptHashData(m_hHash, vectorptr(data), data.size(), 0))
-        {
-            error("CryptHashData(%08lx)", m_type);
-            return false;
-        }
-        return true;
+        assert(m_hHash!=NULL);
+        if (!CryptHashData(m_hHash, &data[0], data.size(), 0))
+            throw winerror(stringformat("CryptHashData(%08lx)", m_type));
     }
-    bool GetHash(ByteVector& hash)
+    std::vector<uint8_t> GetHash()
     {
-        if (m_hHash==NULL)
-            return false;
+        assert(m_hHash!=NULL);
+
         DWORD dwSize;
         if (!CryptGetHashParam(m_hHash, HP_HASHVAL, NULL, &dwSize, 0))
-        {
-            error("CryptGetHashParam(%08lx, HASHVAL-size)", m_type);
-            return false;
-        }
+            throw winerror(stringformat("CryptGetHashParam(%08lx, HASHVAL-size)", m_type));
 
-        hash.resize(dwSize);
-        if (!CryptGetHashParam(m_hHash, HP_HASHVAL, vectorptr(hash), &dwSize, 0))
-        {
-            error("CryptGetHashParam(%08lx, HASHVAL-data)", m_type);
-            return false;
-        }
+        std::vector<uint8_t> hash(dwSize);
+
+        if (!CryptGetHashParam(m_hHash, HP_HASHVAL, &hash[0], &dwSize, 0))
+            throw winerror(stringformat("CryptGetHashParam(%08lx, HASHVAL-data)", m_type));
         CloseHash();
 
-        return true;
+        return hash;
     }
 
-    bool CalcHash(const ByteVector& data, ByteVector& hash, int type)
+    std::vector<uint8_t> CalcHash(const std::vector<uint8_t>& data, int type)
     {
-        if (!InitHash(type))
-            return false;
-        if (!AddData(data))
-            return false;
+        InitHash(type);
+        AddData(data);
 
-        if (!GetHash(hash))
-            return false;
-        return true;
+        return GetHash();
     }
     int hashtype() const { return m_type; }
     std::string hashname() const
