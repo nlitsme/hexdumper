@@ -53,18 +53,25 @@
 #include <sys/stat.h>
 
 #ifdef __MACH__
+#ifdef __APPLE__
+#include "TargetConditionals.h"
+#endif
+#if !TARGET_OS_IPHONE
+// sys/disk.h is not in the ios sdk
 #include <sys/disk.h>
 #endif
-#ifdef __linux__
+#endif
+#if defined(_ANDROID) || defined(__linux__)
 #include <linux/fs.h>
+extern "C" int futimes(int fd, const struct timeval tv[2]);
+#endif
 #endif
 
+#ifndef _WIN32
+#include <unistd.h>     // ftruncate
 #include <sys/ioctl.h>
-#include <unistd.h>
 #endif
-#ifdef _WIN32
-#include <windows.h>
-#endif
+
 
 #include <fcntl.h>
 
