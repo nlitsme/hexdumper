@@ -128,13 +128,13 @@ int main(int argc, char**argv)
             printf("Can't use negative offsets, when filesize is unknown\n");
             return 1;
         }
-        llOffset = llOffset.value() + llFileSize;
+        llOffset = llBaseOffset.value() + llOffset.value() + llFileSize;
     }
 
     if (!llLength && !llEndOffset)
     {
         if (llFileSize >= 0) {
-            llEndOffset = llFileSize;
+            llEndOffset = llBaseOffset.value() + llFileSize;
             llLength = llEndOffset.value() - llOffset.value();
         }
         // else: filesize, length unknown - until EOF.
@@ -185,6 +185,8 @@ int main(int argc, char**argv)
     std::cout << Hex::step(llStepSize);
     if (bSummarize)
         std::cout << std::skipws;
+    else
+        std::cout << std::noskipws;
     std::cout << Hex::offset(llOffset.value());
     std::cout << Hex::dumper(m.ptr(), m.ptr()+llLength.value());
 
