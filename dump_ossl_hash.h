@@ -7,6 +7,8 @@
 #include <openssl/sha.h>
 
 #include <vector>
+#include <cassert>
+#include <stdexcept>
 #include <stdint.h>
 
 //#include "debug.h"
