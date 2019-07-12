@@ -5,9 +5,6 @@ LDFLAGS+=-g -Wall -L/usr/local/lib -L$(OPENSSLDIR)/lib
 
 all: dump dump2 mmedit mmdump
 
-pull:
-	git  submodule foreach 'git pull'
-
 dump: dump.o bighexdump.o bigascdump.o
 dump2: dump2.o 
 mmdump: mmdump.o
