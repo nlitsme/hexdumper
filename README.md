@@ -49,10 +49,23 @@ options
 dump2
 =====
 
-Like dump, but uses mmap for opening files, and uses cpputils/hexdumper.h
+Like dump, but uses mmap for opening files, and uses cpputils/hexdumper.h.
+`dump2` does not have the hashing and summing options, but does do better with
+handling summarizing, and also the -b (baseoffset) option works better.
 
 
+mmdump
+======
 
+Hexdump memory mapped devices.
+I used this tool to investigate disk devices on android phones.
+
+
+mmedit
+======
+
+Edit memory mapped devices.
+I use this tool to make patches to disk devices on android phones.
 
 Author
 ======
