@@ -118,9 +118,11 @@ int main(int argc, char**argv)
     }
     filehandle f = open(srcFilename.c_str(), O_RDONLY);
     int64_t llFileSize = f.size();
+
     if (!llBaseOffset)
         llBaseOffset = 0;
 
+    // determine start
     if (!llOffset)
         llOffset = llBaseOffset;
     else if (llOffset.value() < 0) {
@@ -131,6 +133,7 @@ int main(int argc, char**argv)
         llOffset = llBaseOffset.value() + llOffset.value() + llFileSize;
     }
 
+    // determine end
     if (!llLength && !llEndOffset)
     {
         if (llFileSize >= 0) {
