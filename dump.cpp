@@ -26,9 +26,10 @@
 //    * improved hexdumper
 //    * check for identical lines -before- converting to string
 //    * use MmapReader/FileReader/BlockDevice where appropriate
-//    * bug: dump -o 0x14 -f -4 -w 22 -s 0x56  file
+//    * FIXED bug: dump -o 0x14 -f -4 -w 22 -s 0x56  file
 //        -> crash
-//    * bug: "dump - -o 11 -e 0x20d"  should give the same output as "dump - -o 11 -l 0x202" -> it does not!
+//    * FIXED bug: "dump - -o 11 -e 0x20d"  should give the same output as "dump - -o 11 -l 0x202" -> it does not!
+//    * FIXED make "dump -o 123 -e -123 file"  work.
 //
 // done:
 //    * dump -s STEP {-md5|-sum}
@@ -95,6 +96,7 @@ extern "C" int futimes(int fd, const struct timeval tv[2]);
 #include <stdint.h>
 #include <string.h>
 #include <algorithm>
+#include <optional>
 #include "hexdumper.h"
 
 #define vectorptr(v)  ((v).empty()?NULL:&(v)[0])
@@ -631,7 +633,7 @@ int64_t GetFileSize(const std::string& filename)
     if (INVALID_HANDLE_VALUE == hSrc)
     {
         print("ERROR: Unable to open file %s", filename.c_str());
-        return 0;
+        return -1;
     }
 
     DWORD dwSizeH;
@@ -642,9 +644,9 @@ int64_t GetFileSize(const std::string& filename)
     return ((int64_t)dwSizeH<<32)+dwSizeL;
 #else
     struct stat st;
-    if (lstat(filename.c_str(), &st)) {
-        print("ERROR: lstat");
-        return 0;
+    if (stat(filename.c_str(), &st)) {
+        print("ERROR: stat");
+        return -1;
     }
     if (st.st_mode&S_IFREG)
         return st.st_size;
@@ -657,12 +659,12 @@ int64_t GetFileSize(const std::string& filename)
         if (-1==ioctl(h, DKIOCGETBLOCKCOUNT, &bkcount)) {
             close(h);
             print("ERROR: ioctl(DKIOCGETBLOCKCOUNT)");
-            return 0;
+            return -1;
         }
         if (-1==ioctl(h, DKIOCGETBLOCKSIZE, &bksize)) {
             close(h);
             print("ERROR: ioctl(DKIOCGETBLOCKSIZE)");
-            return 0;
+            return -1;
         }
         devsize = bkcount*bksize;
 #endif
@@ -670,7 +672,7 @@ int64_t GetFileSize(const std::string& filename)
         if (-1==ioctl(h, BLKGETSIZE64, &devsize)) {
             close(h);
             print("ERROR: ioctl(BLKGETSIZE64)");
-            return 0;
+            return -1;
         }
 #endif
         close(h);
@@ -718,25 +720,27 @@ void usage()
 }
 int main(int argc, char **argv)
 {
-    int64_t llOffset=0;     bool haveOffset = false;
-    int64_t llEndOffset=0;
-    int64_t llLength=0;
-    int64_t llBaseOffset=0;
+    std::optional<int64_t> llOffset;
+    std::optional<int64_t> llEndOffset;
+    std::optional<int64_t> llLength;
+    std::optional<int64_t> llBaseOffset;
+
     std::string srcFilename;
     std::string dstFilename;
-    int nDumpUnitSize=1;
+    int nDumpUnitSize = 1;
     std::string crcspec;
 
-    int argsfound=0; 
+    int argsfound = 0; 
+
     for (auto& arg : ArgParser(argc, argv))
         switch(arg.option())
         {
             case 'b': llBaseOffset = arg.getint(); break;
-            case 'h': g_dumpformat= DUMP_HASHES; break;
-            case 'o': llOffset = arg.getint(); haveOffset = true; break;
+            case 'o': llOffset = arg.getint(); break;
             case 'e': llEndOffset = arg.getint(); break;
             case 'l': llLength = arg.getint(); break;
 
+            case 'h': g_dumpformat= DUMP_HASHES; break;
             case 'r': 
 #if !defined(__ANDROID__)
 #ifdef RIPEMD160_DIGEST_LENGTH
@@ -896,43 +900,76 @@ int main(int argc, char **argv)
 
     bool fromStdin= srcFilename=="-";
 
-    uint64_t llFileSize= fromStdin ? 0 : GetFileSize(srcFilename);
-    if (llOffset<0) {
-        if (fromStdin) {
+    int64_t llFileSize= fromStdin ? -1 : GetFileSize(srcFilename);
+
+    if (!llBaseOffset)
+        llBaseOffset = 0;
+
+    // determine start
+    if (!llOffset)
+        llOffset = llBaseOffset;
+    else if (llOffset.value() < 0) {
+        if (fromStdin || llFileSize < 0) {
             printf("dumping end of stdin stream not yet implemented\n");
             return 1;
         }
-        llOffset += llFileSize;
+        llOffset = llBaseOffset.value() + llOffset.value() + llFileSize;
     }
-    if (llLength<0) {
-        if (fromStdin) {
-            printf("dumping end of stdin stream not yet implemented\n");
+
+    // determine end
+    if (!llLength && !llEndOffset)
+    {
+        if (llFileSize >= 0) {
+            llEndOffset = llBaseOffset.value() + llFileSize;
+            llLength = llEndOffset.value() - llOffset.value();
+        }
+        // else: filesize, length unknown - until EOF.
+        else {
+            llEndOffset = INT64_MAX;
+            llLength = INT64_MAX;
+        }
+    }
+    else if (!llLength && llEndOffset) {
+        if (llEndOffset < 0) {
+            if (fromStdin || llFileSize < 0) {
+                printf("Can't use negative offsets, on stdin\n");
+                return 1;
+            }
+            llEndOffset = llEndOffset.value() + llFileSize;
+        }
+        llLength = llEndOffset.value() - llOffset.value();
+    }
+    else if (llLength && !llEndOffset) {
+        if (llLength < 0) {
+            printf("Can't use negative length\n");
             return 1;
         }
-        llLength += llFileSize;
+        llEndOffset = llOffset.value() + llLength.value();
+    }
+    else {
+        if (llEndOffset != llOffset.value() + llLength.value()) {
+            printf("inconsistent use of -l, -o and -e\n");
+            return 1;
+        }
     }
 
+    if (llOffset.value() < llBaseOffset.value()) {
+        printf("offset must be >= baseoffset\n");
+        return 1;
+    }
 
-    if (llLength==0 && fromStdin)
-        llLength= INT64_MAX;
-
-    if (llLength==0 && llEndOffset)
-        llLength= llEndOffset-llOffset;  // NOTE: this will not work for stdin!
-
-    if (llLength==0)
-        llLength= llFileSize;
 
     if (!dstFilename.empty()) {
         if (g_llStepSize)
-            CopyFileSteps(srcFilename, dstFilename, llBaseOffset, llOffset, llLength);
+            CopyFileSteps(srcFilename, dstFilename, llBaseOffset.value(), llOffset.value(), llLength.value());
         else
-            Copyfile(srcFilename, dstFilename, llBaseOffset, llOffset, llLength);
+            Copyfile(srcFilename, dstFilename, llBaseOffset.value(), llOffset.value(), llLength.value());
     }
     else {
         if (g_llStepSize)
-            StepFile(srcFilename, llBaseOffset, llOffset, llLength);
+            StepFile(srcFilename, llBaseOffset.value(), llOffset.value(), llLength.value());
         else
-            Dumpfile(srcFilename, llBaseOffset, llOffset, llLength);
+            Dumpfile(srcFilename, llBaseOffset.value(), llOffset.value(), llLength.value());
     }
 
     return 0;
