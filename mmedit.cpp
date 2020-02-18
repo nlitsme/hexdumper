@@ -187,11 +187,8 @@ int main(int argc, char**argv)
         return 1;
     }
 
-    filehandle f= open(filename.c_str(), O_RDWR);
-    if (f==-1) {
-        perror(filename.c_str());
-        return 1;
-    }
+    filehandle f = open(filename.c_str(), O_RDWR);
+
     for (auto &e : edits)
         mmapply(f, e.ofs, e.data);
 

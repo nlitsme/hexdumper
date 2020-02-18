@@ -116,10 +116,7 @@ int main(int argc, char**argv)
     }
     //printf("mm(%08llx, %08llx): s=%llx, w=%llx\n", offset, length, step, width);
     filehandle f= open(filename.c_str(), openmode);
-    if (f==-1) {
-        perror(filename.c_str());
-        return 1;
-    }
+
     if (outname.empty()) {
         if (!devicestep) {
             mmdump(f, offset, length, step, width, access, mmapmode);
