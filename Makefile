@@ -6,11 +6,11 @@ LDFLAGS+=-g -Wall -L/usr/local/lib -L$(OPENSSLDIR)/lib
 all: dump dump2 mmedit mmdump
 
 dump: dump.o bighexdump.o bigascdump.o
-dump2: dump2.o 
+dump2: dump2.o  machmemory.o
 mmdump: mmdump.o
 mmedit: mmedit.o
 
-LDFLAGS+=-lcrypto
+LDFLAGS+=-lcrypto -framework Security
 
 %.o: dumputils/%.cpp
 	$(CXX) $(CXXFLAGS) $^ -o $@ 

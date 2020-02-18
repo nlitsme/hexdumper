@@ -7,6 +7,9 @@
 
 #include "mmem.h"
 #include "fhandle.h"
+#ifdef __MACH__
+#include "machmemory.h"
+#endif
 
 enum {
     DUMP_BOTH,
@@ -30,21 +33,128 @@ void usage()
         -1, -2, -4, -8  -- wordsize
 )TEXT");
 }
+struct DumpParams {
+    std::optional<int64_t> offset;
+    std::optional<int64_t> endOffset;
+    std::optional<int64_t> length;
+    std::optional<int64_t> baseOffset;
+    std::optional<int64_t> fileSize;
+
+    int dumpUnitSize = 1;
+    int unitsPerLine = 0;
+    uint64_t stepSize = 0;
+    int dumpformat = DUMP_BOTH;
+    bool summarize = true;
+    std::optional<int> summarizeThreshold;
+
+
+    bool resolveSizes()
+    {
+        if (!baseOffset)
+            baseOffset = 0;
+
+        // determine start
+        if (!offset)
+            offset = baseOffset;
+        else if (*offset < 0) {
+            if (!fileSize) {
+                printf("Can't use negative offsets, when filesize is unknown\n");
+                return false;
+            }
+            offset = *baseOffset + *offset + *fileSize;
+        }
+
+        // determine end
+        if (!length && !endOffset)
+        {
+            if (fileSize) {
+                endOffset = *baseOffset + *fileSize;
+                length = *endOffset - *offset;
+            }
+            // else: filesize, length unknown - until EOF.
+        }
+        else if (!length && endOffset) {
+            if (endOffset < 0) {
+                if (!fileSize) {
+                    printf("Can't use negative offsets, when filesize is unknown\n");
+                    return false;
+                }
+                endOffset = *endOffset + *fileSize;
+            }
+            length = *endOffset - *offset;
+        }
+        else if (length && !endOffset) {
+            if (length < 0) {
+                printf("Can't use negative length\n");
+                return false;
+            }
+            endOffset = *offset + *length;
+        }
+        else {
+            if (endOffset != *offset + *length) {
+                printf("inconsistent use of -l, -o and -e\n");
+                return false;
+            }
+        }
+
+        if (*offset < *baseOffset) {
+            printf("offset must be >= baseoffset\n");
+            return false;
+        }
+        return true;
+    }
+
+    void resolveLineFormat()
+    {
+        if (unitsPerLine==0) {
+            switch(dumpUnitSize)
+            {
+                case 1: unitsPerLine = 32; break;
+                case 2: unitsPerLine = 16; break;
+                case 4: unitsPerLine = 8; break;
+                case 8: unitsPerLine = 4; break;
+            }
+            switch(dumpformat)
+            {
+                case DUMP_BOTH:
+                    unitsPerLine /= 2;
+                    break;
+                case DUMP_ASCII:
+                    unitsPerLine = 64;
+                    break;
+            }
+        }
+
+    }
+
+    void applyFormat(std::ostream& os)
+    {
+        switch(dumpformat)
+        {
+            case DUMP_ASCII: os << std::right; break;
+            case DUMP_HEX: os << std::left; break;
+        }
+        if (summarizeThreshold)
+            os << Hex::summarize_threshold(*summarizeThreshold);
+        
+        os << std::showpoint;
+        os << std::setw(unitsPerLine);
+        os << std::setprecision(dumpUnitSize);
+        os << std::hex;
+        os << Hex::step(stepSize);
+        if (summarize)
+            os << std::skipws;
+        else
+            os << std::noskipws;
+        os << Hex::offset(*offset);
+    }
+};
 int main(int argc, char**argv)
 {
-    std::optional<int64_t> llOffset;
-    std::optional<int64_t> llEndOffset;
-    std::optional<int64_t> llLength;
-    std::optional<int64_t> llBaseOffset;
-
     std::string srcFilename;
     std::string dstFilename;
-    int nDumpUnitSize = 1;
-    int nUnitsPerLine = 0;
-    uint64_t llStepSize = 0;
-    int dumpformat = DUMP_BOTH;
-    bool bSummarize = true;
-    std::optional<int> nSummarizeThreshold;
+    DumpParams params;
+    int processId = 0;
 
     int argsfound = 0; 
     for (auto& arg : ArgParser(argc, argv))
@@ -63,22 +173,23 @@ int main(int argc, char**argv)
           // todo: add choice of reading via stdio, or via mmap
           // todo: add choice of outputting a hexdump, rawdata, stringdump, to dstFilename
 
-            case 'b': llBaseOffset = arg.getint(); break;
-            case 'o': llOffset = arg.getint(); break;
-            case 'e': llEndOffset = arg.getint(); break;
-            case 'l': llLength = arg.getint(); break;
+            case 'b': params.baseOffset = arg.getint(); break;  // the offset at file pos 0
+            case 'o': params.offset = arg.getint(); break;
+            case 'e': params.endOffset = arg.getint(); break;
+            case 'l': params.length = arg.getint(); break;
+            case 'p': processId = arg.getint(); break;
 
-            case 'w': nUnitsPerLine = arg.getuint(); break;
-            case 's': llStepSize = arg.getuint(); break;
-            case 'f': bSummarize = false; break;
-            case 'S': nSummarizeThreshold = arg.getuint(); break;
+            case 'w': params.unitsPerLine = arg.getuint(); break;
+            case 's': params.stepSize = arg.getuint(); break;
+            case 'f': params.summarize = false; break;
+            case 'S': params.summarizeThreshold = arg.getuint(); break;
             case 'x': if (arg.count()==2)
-                          dumpformat = DUMP_ASCII; 
+                          params.dumpformat = DUMP_ASCII; 
                       else
-                          dumpformat = DUMP_HEX; 
+                          params.dumpformat = DUMP_HEX; 
                       break;
             case '1': case '2': case '4': case '8':
-                nDumpUnitSize = arg.option()-'0';
+                params.dumpUnitSize = arg.option()-'0';
                 break;
 
             case -1:
@@ -93,104 +204,52 @@ int main(int argc, char**argv)
                 return 1;
         }
 
-    if (argsfound==0 || argsfound>2)
+    if (processId==0 && (argsfound==0 || argsfound>2))
     {
         usage();
         return 1;
     }
-    if (nUnitsPerLine==0) {
-        switch(nDumpUnitSize)
-        {
-            case 1: nUnitsPerLine = 32; break;
-            case 2: nUnitsPerLine = 16; break;
-            case 4: nUnitsPerLine = 8; break;
-            case 8: nUnitsPerLine = 4; break;
-        }
-        switch(dumpformat)
-        {
-            case DUMP_BOTH:
-                nUnitsPerLine /= 2;
-                break;
-            case DUMP_ASCII:
-                nUnitsPerLine = 64;
-                break;
-        }
-    }
-    filehandle f = open(srcFilename.c_str(), O_RDONLY);
-    int64_t llFileSize = f.size();
 
-    if (!llBaseOffset)
-        llBaseOffset = 0;
+    params.resolveLineFormat();
 
-    // determine start
-    if (!llOffset)
-        llOffset = llBaseOffset;
-    else if (llOffset.value() < 0) {
-        if (llFileSize < 0) {
-            printf("Can't use negative offsets, when filesize is unknown\n");
+    filehandle f;
+#ifdef __MACH__
+    std::shared_ptr<MachVirtualMemory> vmem;
+#endif
+    std::shared_ptr<mappedmem> mmem;
+
+    if (!srcFilename.empty()) {
+        f = open(srcFilename.c_str(), O_RDONLY);
+        params.fileSize = f.size();
+
+        if (!params.resolveSizes())
             return 1;
-        }
-        llOffset = llBaseOffset.value() + llOffset.value() + llFileSize;
+        mmem = std::make_shared<mappedmem>(f, *params.offset - *params.baseOffset, *params.endOffset - *params.baseOffset, PROT_READ);
     }
+#ifdef __MACH__
+    else if (processId) {
+        try {
+        task_t task = MachOpenProcessByPid(processId);
+        vmem = std::make_shared<MachVirtualMemory>(task, *params.offset, *params.length);
+        }
+        catch(std::exception& e)
+        {
+            std::cout << "ERROR " << e.what() << "\n";
+        }
+    }
+#endif
 
-    // determine end
-    if (!llLength && !llEndOffset)
-    {
-        if (llFileSize >= 0) {
-            llEndOffset = llBaseOffset.value() + llFileSize;
-            llLength = llEndOffset.value() - llOffset.value();
-        }
-        // else: filesize, length unknown - until EOF.
-    }
-    else if (!llLength && llEndOffset) {
-        if (llEndOffset < 0) {
-            if (llFileSize < 0) {
-                printf("Can't use negative offsets, when filesize is unknown\n");
-                return 1;
-            }
-            llEndOffset = llEndOffset.value() + llFileSize;
-        }
-        llLength = llEndOffset.value() - llOffset.value();
-    }
-    else if (llLength && !llEndOffset) {
-        if (llLength < 0) {
-            printf("Can't use negative length\n");
-            return 1;
-        }
-        llEndOffset = llOffset.value() + llLength.value();
-    }
+    params.applyFormat(std::cout);
+
+    if (mmem)
+        std::cout << Hex::dumper(mmem->ptr(), mmem->ptr()+*params.length);
+#ifdef __MACH__
+    else if (vmem)
+        std::cout << Hex::dumper(vmem->begin(), vmem->end());
+#endif
     else {
-        if (llEndOffset != llOffset.value() + llLength.value()) {
-            printf("inconsistent use of -l, -o and -e\n");
-            return 1;
-        }
-    }
-
-    if (llOffset.value() < llBaseOffset.value()) {
-        printf("offset must be >= baseoffset\n");
+        printf("Nothing to do\n");
         return 1;
     }
-
-    mappedmem m(f, llOffset.value() - llBaseOffset.value(), llEndOffset.value() - llBaseOffset.value(), PROT_READ);
-
-    switch(dumpformat)
-    {
-        case DUMP_ASCII: std::cout << std::right; break;
-        case DUMP_HEX: std::cout << std::left; break;
-    }
-    if (nSummarizeThreshold)
-        std::cout << Hex::summarize_threshold(nSummarizeThreshold.value());
-    
-    std::cout << std::showpoint;
-    std::cout << std::setw(nUnitsPerLine);
-    std::cout << std::setprecision(nDumpUnitSize);
-    std::cout << std::hex;
-    std::cout << Hex::step(llStepSize);
-    if (bSummarize)
-        std::cout << std::skipws;
-    else
-        std::cout << std::noskipws;
-    std::cout << Hex::offset(llOffset.value());
-    std::cout << Hex::dumper(m.ptr(), m.ptr()+llLength.value());
-
+    return 0;
 }
