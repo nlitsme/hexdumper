@@ -1,7 +1,8 @@
 CXXFLAGS+=/D_USE_WINCRYPTAPI
-CXXFLAGS+=/Zi /Wall $(if $(D),/O0,/O2) /I cpputils /I dumputils /EHsc /DNOMINMAX
+CXXFLAGS+=/Zi /Wall $(if $(D),/O0,/O2) /I cpputils /I dumputils /EHsc /DNOMINMAX /std:c++17
 LDFLAGS=advapi32.lib
-
+CXX=cl
+CC=cl
 all: dump.exe
 
 pull:
