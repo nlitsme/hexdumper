@@ -9,6 +9,11 @@ LDFLAGS+=-g -Wall -L/usr/local/lib -L$(OPENSSLDIR)/lib
 
 all: dump dump2 mmedit mmdump
 
+# test for macos
+ifneq ($(wildcard /System/Library/Extensions),)
+OSTYPE=Darwin
+endif
+
 dump: dump.o bighexdump.o bigascdump.o
 dump2: dump2.o  $(if $(filter $(OSTYPE),Darwin),machmemory.o)
 mmdump: mmdump.o
