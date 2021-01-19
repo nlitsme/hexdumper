@@ -1,5 +1,6 @@
 CXXFLAGS+=/D_USE_WINCRYPTAPI
 CXXFLAGS+=/Zi /Wall $(if $(D),/O0,/O2) /I cpputils /I dumputils /EHsc /DNOMINMAX /std:c++17
+CXXFLAGS+=/utf-8
 LDFLAGS=advapi32.lib
 CXX=cl
 CC=cl
