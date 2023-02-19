@@ -90,14 +90,14 @@ extern "C" int futimes(int fd, const struct timeval tv[2]);
 #include "dump_sum.h"
 #include "bighexdump.h"
 #include "bigascdump.h"
-#include "formatter.h"
-#include "stringlibrary.h"
-#include "argparse.h"
+#include <cpputils/formatter.h>
+#include <cpputils/stringlibrary.h>
+#include <cpputils/argparse.h>
 #include <stdint.h>
 #include <string.h>
 #include <algorithm>
 #include <optional>
-#include "hexdumper.h"
+#include <cpputils/hexdumper.h>
 
 #define vectorptr(v)  ((v).empty()?NULL:&(v)[0])
 

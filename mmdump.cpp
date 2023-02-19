@@ -2,15 +2,15 @@
 #include <string.h>
 #include <algorithm>
 #include <vector>
-#include "argparse.h"
-#include "formatter.h"
+#include <cpputils/argparse.h>
+#include <cpputils/formatter.h>
 #include <sys/mman.h>
 #include <sys/errno.h>
 #include <unistd.h>
 #include <fcntl.h>
 
-#include "mmem.h"
-#include "fhandle.h"
+#include <cpputils/mmem.h>
+#include <cpputils/fhandle.h>
 
 void copydata(uint8_t *dst, const uint8_t *src, int size, int access)
 {

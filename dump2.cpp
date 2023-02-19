@@ -2,11 +2,11 @@
 #include <iostream>
 #include <fcntl.h>
 #include <optional>
-#include "hexdumper.h"
-#include "argparse.h"
+#include <cpputils/hexdumper.h>
+#include <cpputils/argparse.h>
 
-#include "mmem.h"
-#include "fhandle.h"
+#include <cpputils/mmem.h>
+#include <cpputils/fhandle.h>
 #ifdef __MACH__
 #include "machmemory.h"
 #endif

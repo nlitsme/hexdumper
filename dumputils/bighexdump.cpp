@@ -1,5 +1,5 @@
 #include <string>
-#include "formatter.h"
+#include <cpputils/formatter.h>
 #include "bighexdump.h"
 
 std::string asciidump(const uint8_t *p, size_t n)

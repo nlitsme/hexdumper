@@ -3,15 +3,15 @@
 #include <algorithm>
 
 #define _DISABLE_DEBUG
-#include "argparse.h"
+#include <cpputils/argparse.h>
 #include <sys/mman.h>
 #include <sys/errno.h>
 #include <unistd.h>
 #include <fcntl.h>
 #include <vector>
 
-#include "mmem.h"
-#include "fhandle.h"
+#include <cpputils/mmem.h>
+#include <cpputils/fhandle.h>
 
 
 int parsehexnyble(char c)
