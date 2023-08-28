@@ -37,7 +37,7 @@ endif()
 find_package(cpputils REQUIRED)
 
 if (NOT WIN32)
-find_package(OpenSSL REQUIRED)
+find_package(openssl REQUIRED)
 endif()
 
 add_executable(dump dump.cpp dumputils/bigascdump.cpp dumputils/bighexdump.cpp)
@@ -52,8 +52,16 @@ endif()
 
 if (NOT WIN32)
 # NOTE: until I add windows support to cpputils/mmem.h these will not build.
-add_executable(dump2 dump2.cpp)
+list(APPEND Dump2Src dump2.cpp)
+if (DARWIN)
+    list(APPEND Dump2Src machmemory.cpp)
+endif()
+add_executable(dump2 ${Dump2Src})
 target_link_libraries(dump2 cpputils)
+if (DARWIN)
+    find_library(SecurityFramework Security)
+    target_link_libraries(dump2 ${SecurityFramework})
+endif()
 
 add_executable(mmdump mmdump.cpp)
 target_link_libraries(mmdump cpputils)
