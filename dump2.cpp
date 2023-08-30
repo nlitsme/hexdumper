@@ -242,7 +242,7 @@ int main(int argc, char**argv)
     params.applyFormat(std::cout);
 
     if (mmem)
-        std::cout << Hex::dumper(mmem->ptr(), mmem->ptr()+*params.length);
+        std::cout << Hex::dumper(mmem->data(), mmem->data()+*params.length);
 #ifdef __MACH__
     else if (vmem)
         std::cout << Hex::dumper(vmem->begin(), vmem->end());

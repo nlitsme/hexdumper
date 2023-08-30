@@ -154,7 +154,7 @@ void mmapply(int f, uint64_t ofs, const std::vector<uint8_t>& data)
 {
     mappedmem  m(f, ofs, ofs+data.size(), PROT_READ|PROT_WRITE);
 
-    memcpy(m.ptr(), &data[0], data.size());
+    memcpy(m.data(), &data[0], data.size());
 }
 
 void usage()

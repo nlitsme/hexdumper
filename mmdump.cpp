@@ -28,9 +28,9 @@ void mmdump(int f, uint64_t offset, uint64_t length, uint64_t step, uint64_t wid
     mappedmem m(f, offset, offset+length, mmapmode);
 
     std::vector<uint8_t> data(width);
-    for (uint8_t *p= m.ptr() ; p<m.ptr()+length ; p+=step)
+    for (uint8_t *p= m.data() ; p<m.data()+length ; p+=step)
     {
-        uint64_t want= std::min((uint64_t)(m.ptr()+length-p), width);
+        uint64_t want= std::min((uint64_t)(m.data()+length-p), width);
         copydata(&data[0], p, want, access);
         if (want<width)
             std::fill(&data[want], &data[width], 0);
@@ -49,7 +49,7 @@ void mmsave(int f, int of, uint64_t offset, uint64_t length, int mmapmode)
 {
     mappedmem m(f, offset, offset+length, mmapmode);
 
-    write(of, m.ptr(), length);
+    write(of, m.data(), length);
 }
 
 void usage()
